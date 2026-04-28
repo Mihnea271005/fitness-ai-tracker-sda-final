@@ -9,6 +9,14 @@ def aggregate_sessions(sets_df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     df = sets_df.copy()
+    df["reps"] = pd.to_numeric(df["reps"], errors="coerce")
+    df["weight"] = pd.to_numeric(df["weight"], errors="coerce")
+    # Keep AI features focused on strength-training rows. Cardio-only imported rows
+    # such as Cycling/Stairmaster have zero reps and should not affect predictions.
+    df = df[(df["reps"] > 0) & (df["weight"] >= 0)].copy()
+    if df.empty:
+        return pd.DataFrame()
+
     df["workout_date"] = pd.to_datetime(df["workout_date"])
     df["volume"] = df["reps"] * df["weight"]
 

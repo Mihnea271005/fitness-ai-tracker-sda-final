@@ -11,6 +11,10 @@ def get_personal_records(sets_df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=["exercise", "max_weight", "achieved_on"])
 
     df = sets_df.copy()
+    df["reps"] = pd.to_numeric(df["reps"], errors="coerce")
+    df = df[df["reps"] > 0].copy()
+    if df.empty:
+        return pd.DataFrame(columns=["exercise", "max_weight", "achieved_on"])
     df["workout_date"] = pd.to_datetime(df["workout_date"])
 
     idx = df.groupby("exercise")["weight"].idxmax()

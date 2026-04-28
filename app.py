@@ -80,10 +80,10 @@ c5.metric("⚡ Volum total", f"{_total_volume_t} t")
 with st.sidebar:
     st.header("⚙️ Control proiect")
 
-    if st.button("📂 Încarcă seed data", use_container_width=True):
-        with st.spinner("Generare date..."):
+    if st.button("📂 Încarcă date Kaggle", use_container_width=True):
+        with st.spinner("Import date Kaggle..."):
             load_seed_data()
-        st.success("14 săptămâni de antrenamente generate!")
+        st.success("Datele din dataset-ul Kaggle au fost importate și normalizate.")
         st.rerun()
 
     if st.button("🗑️ Resetează baza de date", use_container_width=True):
@@ -175,7 +175,7 @@ with tab_history:
     sets_df = load_sets()
 
     if sets_df.empty:
-        st.info("Nu există date încă. Încarcă seed data sau adaugă manual câteva serii.")
+        st.info("Nu există date încă. Încarcă datele Kaggle sau adaugă manual câteva serii.")
     else:
         col_filter, col_dl = st.columns([4, 1])
         selected_ex = col_filter.selectbox(
@@ -255,7 +255,7 @@ with tab_ai:
     sets_df = load_sets()
 
     if sets_df.empty:
-        st.info("Adaugă date sau încarcă seed data, apoi antrenează modelul din sidebar.")
+        st.info("Adaugă date sau încarcă datele Kaggle, apoi antrenează modelul din sidebar.")
     else:
         exercises_available = sorted(sets_df["exercise"].unique().tolist())
         selected_ai_ex = st.selectbox("Alege exercițiul", exercises_available, key="ai_exercise")
@@ -430,7 +430,7 @@ with tab_records:
     sets_df = load_sets()
 
     if sets_df.empty:
-        st.info("Nu există date. Încarcă seed data pentru demo.")
+        st.info("Nu există date. Încarcă datele Kaggle pentru demo.")
     else:
         prs = get_personal_records(sets_df)
         if not prs.empty:
@@ -521,7 +521,7 @@ with tab_exam:
         - Comparație: RandomForest vs GradientBoosting vs Ridge
 
         **4. Demo live (2 min)**
-        1. Click **"Încarcă seed data"** — 14 săptămâni de antrenamente generate
+        1. Click **"Încarcă date Kaggle"** — se importă și normalizează istoricul real din dataset
         2. Click **"Antrenează modelul AI"**
         3. Tab **AI Coach** → selectezi un exercițiu → arăți recomandarea + graficul
         4. Expander **Feature Importance** → explici ce contează în model
@@ -573,7 +573,7 @@ with tab_exam:
             ✅ Detecție automată stagnare / oboseală  
             ✅ Recorduri personale cu istoric  
             ✅ 100% Python, rulare locală  
-            ✅ 1 000+ rânduri de seed data realistă  
+            ✅ date reale importate dintr-un dataset Kaggle de workout-uri  
 
             **Idei de extensie:**
             - autentificare multi-user

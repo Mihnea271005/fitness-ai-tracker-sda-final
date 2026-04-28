@@ -1,80 +1,87 @@
-# Fitness AI Tracker — SDA Academy Final Project
+# Fitness AI Tracker - SDA Academy Final Project
 
-Aplicație finală Python cu machine learning pentru cursul de inteligență artificială.  
-Urmărește antrenamentele și folosește AI pentru a recomanda greutatea și repetările la sesiunea următoare.
+Aplicatie Python cu Streamlit si machine learning pentru urmarirea antrenamentelor si recomandari AI pentru urmatoarea sesiune.
 
-## Ce s-a îmbunătățit față de versiunea inițială
+Versiunea aceasta foloseste ca seed/training source dataset-ul Kaggle `joep89/weightlifting`, in locul generatorului sintetic folosit anterior.
 
-| Zonă | Versiunea veche | Versiunea nouă |
-|---|---|---|
-| Feature-uri model | 5 | 7 (+ trend 3 sesiuni + session count) |
-| Modele disponibile | RandomForest | RF + GradientBoosting + Ridge |
-| Comparație modele | ❌ | ✅ cu grafic MAE |
-| Feature importance | ❌ | ✅ grafic interactiv |
-| Detecție stagnare | ❌ | ✅ alertă automată |
-| Detecție oboseală | ❌ | ✅ alertă declin |
-| Recorduri personale | ❌ | ✅ tab dedicat |
-| Analiza progres | ❌ | ✅ status per exercițiu |
-| Volum săptămânal | ❌ | ✅ grafic bar |
-| Distribuție grupe | ❌ | ✅ pie chart |
-| Seed data | CSV static (~30 rânduri) | Generator programatic (1 008 rânduri, 14 săptămâni) |
-| Dashboard | 3 metrici | 5 metrici (+ streak + volum total) |
+## Ce s-a schimbat in aceasta versiune
 
-## Funcționalități
+- seed data sintetica a fost inlocuita cu import din dataset-ul real Kaggle
+- exercitiile din aplicatie au fost extinse pe baza dataset-ului
+- numele de exercitii sunt normalizate pentru a evita duplicate evidente
+- greutatile din Kaggle sunt convertite din pounds in kg
+- randurile cardio sau cu `reps = 0` raman in istoric, dar sunt ignorate de componenta AI
 
-- Adăugare manuală de serii cu dată, exercițiu, repetări, greutate și observații
-- Stocare locală în SQLite
-- Istoric complet cu export CSV
-- Grafice de progres: greutate maximă, volum săptămânal, distribuție grupe musculare
-- Seed data realistă: 14 săptămâni, 8 exerciții, progresie liniară cu deload periodic
-- Antrenare model AI direct din interfață
-- Recomandare greutate + repetări pentru sesiunea următoare
-- Alertă automată de stagnare și oboseală
-- Feature importance — *de ce* recomandă modelul ce recomandă
-- Comparație RandomForest vs GradientBoosting vs Ridge
-- Recorduri personale (PR) per exercițiu
-- Analiza trend progres per exercițiu
+## Functionalitati
+
+- adaugare manuala de serii cu data, exercitiu, repetari, greutate si observatii
+- stocare locala in SQLite
+- istoric complet cu export CSV
+- grafice de progres si recorduri personale
+- antrenare model AI direct din interfata
+- recomandare greutate + repetari pentru sesiunea urmatoare
+- alerta de stagnare / declin
+- comparatie intre modele
+- explicatii prin feature importance
+
+## Dataset
+
+Sursa de seed/training data:
+- Kaggle: `joep89/weightlifting`
+
+CSV folosit in proiect:
+- `data/weightlifting_721_workouts.csv`
+
+La incarcare, aplicatia mapeaza datele astfel:
+- `Date` -> `workout_date`
+- `Exercise Name` -> `exercise`
+- `Set Order` -> `set_number`
+- `Reps` -> `reps`
+- `Weight` -> `weight` (convertit din lb in kg)
+- `Notes` + `Workout Notes` -> `notes`
 
 ## Componenta AI
 
-**Model principal:** `RandomForestRegressor(n_estimators=150)`
+Model principal:
+- `RandomForestRegressor(n_estimators=150)`
 
-**Feature-uri (input):**
+Feature-uri:
+- `exercise`
+- `prev_max_weight`
+- `prev_avg_reps`
+- `prev_total_volume`
+- `prev_total_sets`
+- `prev_days_since_last`
+- `prev_session_count`
+- `prev_weight_trend_3`
 
-| Feature | Descriere |
-|---|---|
-| `exercise` | Exercițiul (one-hot encoded) |
-| `prev_max_weight` | Greutatea maximă din sesiunea anterioară |
-| `prev_avg_reps` | Repetările medii anterioare |
-| `prev_total_volume` | Volum total anterior (reps × kg) |
-| `prev_total_sets` | Numărul de serii |
-| `prev_days_since_last` | Zilele de pauză |
-| `prev_session_count` | A câta sesiune totală |
-| `prev_weight_trend_3` | Tendința greutății pe ultimele 3 sesiuni |
+Output:
+- greutate recomandata
+- repetari recomandate
 
-**Output:** greutate recomandată + repetări recomandate
-
-**Evaluare:** MAE pe split 80/20 cronologic (nu aleator, pentru realism)
+Evaluare:
+- MAE pe split cronologic 80/20
 
 ## Structura proiectului
 
-```
+```text
 fitness-ai-tracker-sda-final/
-├── app.py                  # Aplicația Streamlit
-├── requirements.txt
-├── README.md
-├── data/
-│   └── seed_workouts.csv   # Generat automat la seed load
-├── models/
-│   └── next_workout_model.joblib
-└── src/
-    ├── __init__.py
-    ├── analytics.py        # Stagnare, PR-uri, streak, volum (NOU)
-    ├── constants.py        # Exerciții, grupe musculare, categorii
-    ├── database.py         # SQLite CRUD
-    ├── features.py         # Feature engineering
-    ├── model.py            # Train, predict, compare, feature importance
-    └── seed.py             # Generator programatic date realiste
+|-- app.py
+|-- requirements.txt
+|-- README.md
+|-- data/
+|   |-- weightlifting_721_workouts.csv
+|   `-- seed_workouts.csv
+|-- models/
+|   `-- next_workout_model.joblib
+`-- src/
+    |-- __init__.py
+    |-- analytics.py
+    |-- constants.py
+    |-- database.py
+    |-- features.py
+    |-- model.py
+    `-- seed.py
 ```
 
 ## Instalare
@@ -91,34 +98,26 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Aplicația se deschide la: [http://localhost:8501](http://localhost:8501)
+Aplicatia se deschide de obicei la:
+- [http://localhost:8501](http://localhost:8501)
 
-## Flux demo recomandat (examen)
+## Flux demo recomandat
 
-1. Click **"Încarcă seed data"** — generează 14 săptămâni de antrenamente
-2. Click **"Antrenează modelul AI"**
-3. Tab **AI Coach** → selectezi exercițiu → arăți recomandarea + alertă stagnare
-4. Expander **Feature Importance** → explici ce feature contează
-5. Expander **Comparație modele** → demonstrezi că RF e mai bun decât Ridge
-6. Tab **Recorduri** → arăți PRs și analiza de trend per exercițiu
-7. Tab **Pregătire Examen** → structura prezentării și răspunsuri la întrebări
+1. Click pe `Incarca date Kaggle`
+2. Click pe `Antreneaza modelul AI`
+3. Intra in tab-ul `AI Coach`
+4. Selecteaza un exercitiu
+5. Arata recomandarea, progresul si comparatia intre modele
 
-## Evaluare model
+## Limitari
 
-- `MAE greutate` — eroarea medie în kg pe setul de test
-- `MAE repetări` — eroarea medie în repetări pe setul de test
-- Split cronologic 80/20 (nu random) pentru a reflecta realitatea unui model time-series
-
-## Limitări cunoscute
-
-- Un singur utilizator
-- Necesită date consistente pentru recomandări bune
-- Nu înlocuiește sfatul unui antrenor uman
+- un singur utilizator
+- unele exercitii cardio din dataset nu sunt utile pentru recomandare
+- modelul depinde de consistenta datelor istorice
 
 ## Idei de extensie
 
-- Autentificare multi-user
-- Export PDF cu raport de progres
-- Deploy pe Streamlit Cloud
-- Notificări email la stagnare
-- Predicție bazată pe plan de antrenament predefinit
+- upload de date exportate din alte aplicatii
+- autentificare multi-user
+- export PDF
+- deploy permanent in cloud
