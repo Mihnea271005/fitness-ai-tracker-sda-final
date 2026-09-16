@@ -4,3 +4,11 @@ __pycache__/
 fitness_ai.db
 models/*.joblib
 .streamlit/secrets.toml
+
+# mobile/ (React Native / Expo)
+mobile/node_modules/
+mobile/.expo/
+mobile/.expo-shared/
+mobile/dist/
+mobile/web-build/
+mobile/.env

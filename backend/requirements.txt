@@ -1,0 +1,5 @@
+# Backend API deps, on top of the existing src/ dependencies in the root requirements.txt.
+# Install both: pip install -r requirements.txt -r backend/requirements.txt
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.13.5
