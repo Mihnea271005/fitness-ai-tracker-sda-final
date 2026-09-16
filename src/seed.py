@@ -33,7 +33,7 @@ def build_seed_dataframe(dataset_path: Path | None = None) -> pd.DataFrame:
     source_path = dataset_path or RAW_DATASET_PATH
     if not source_path.exists():
         raise FileNotFoundError(
-            f"Nu am gasit dataset-ul Kaggle la: {source_path}"
+            f"Kaggle dataset not found at: {source_path}"
         )
 
     raw_df = pd.read_csv(source_path)

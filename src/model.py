@@ -131,7 +131,7 @@ def train_model(sets_df: pd.DataFrame) -> tuple[Pipeline | None, str, dict[str, 
     if len(training_df) < 6:
         return (
             None,
-            "Nu exista suficiente sesiuni pentru antrenare. Adauga mai multe date sau incarca seed data.",
+            "Not enough sessions to train yet. Add more data or load seed data.",
             None,
         )
 
@@ -142,7 +142,7 @@ def train_model(sets_df: pd.DataFrame) -> tuple[Pipeline | None, str, dict[str, 
     joblib.dump(model, MODEL_PATH)
 
     metrics = evaluate_model(sets_df)
-    message = f"Model antrenat pe {len(training_df)} exemple."
+    message = f"Model trained on {len(training_df)} examples."
     return model, message, metrics
 
 

@@ -1,51 +1,51 @@
 # Fitness AI Tracker - SDA Academy Final Project
 
-Aplicatie Python cu Streamlit si machine learning pentru urmarirea antrenamentelor si recomandari AI pentru urmatoarea sesiune.
+Python application with Streamlit and machine learning for tracking workouts and getting AI recommendations for the next session.
 
-Versiunea aceasta foloseste ca seed/training source dataset-ul Kaggle `joep89/weightlifting`, in locul generatorului sintetic folosit anterior.
+This version uses the Kaggle dataset `joep89/weightlifting` as the seed/training source, replacing the synthetic generator used previously.
 
-## Ce s-a schimbat in aceasta versiune
+## What changed in this version
 
-- seed data sintetica a fost inlocuita cu import din dataset-ul real Kaggle
-- exercitiile din aplicatie au fost extinse pe baza dataset-ului
-- numele de exercitii sunt normalizate pentru a evita duplicate evidente
-- greutatile din Kaggle sunt convertite din pounds in kg
-- randurile cardio sau cu `reps = 0` raman in istoric, dar sunt ignorate de componenta AI
+- synthetic seed data was replaced with an import from the real Kaggle dataset
+- the app's exercise list was expanded based on the dataset
+- exercise names are normalized to avoid obvious duplicates
+- weights from Kaggle are converted from pounds to kg
+- cardio rows or rows with `reps = 0` stay in the history, but are ignored by the AI component
 
-## Functionalitati
+## Features
 
-- adaugare manuala de serii cu data, exercitiu, repetari, greutate si observatii
-- stocare locala in SQLite
-- istoric complet cu export CSV
-- grafice de progres si recorduri personale
-- antrenare model AI direct din interfata
-- recomandare greutate + repetari pentru sesiunea urmatoare
-- alerta de stagnare / declin
-- comparatie intre modele
-- explicatii prin feature importance
+- manually add sets with date, exercise, reps, weight, and notes
+- local storage in SQLite
+- full history with CSV export
+- progress charts and personal records
+- train the AI model directly from the interface
+- weight + reps recommendation for the next session
+- stagnation / decline alerts
+- model comparison
+- explanations via feature importance
 
 ## Dataset
 
-Sursa de seed/training data:
+Seed/training data source:
 - Kaggle: `joep89/weightlifting`
 
-CSV folosit in proiect:
+CSV used in the project:
 - `data/weightlifting_721_workouts.csv`
 
-La incarcare, aplicatia mapeaza datele astfel:
+On load, the app maps the data as follows:
 - `Date` -> `workout_date`
 - `Exercise Name` -> `exercise`
 - `Set Order` -> `set_number`
 - `Reps` -> `reps`
-- `Weight` -> `weight` (convertit din lb in kg)
+- `Weight` -> `weight` (converted from lb to kg)
 - `Notes` + `Workout Notes` -> `notes`
 
-## Componenta AI
+## AI Component
 
-Model principal:
+Main model:
 - `RandomForestRegressor(n_estimators=150)`
 
-Feature-uri:
+Features:
 - `exercise`
 - `prev_max_weight`
 - `prev_avg_reps`
@@ -56,13 +56,13 @@ Feature-uri:
 - `prev_weight_trend_3`
 
 Output:
-- greutate recomandata
-- repetari recomandate
+- recommended weight
+- recommended reps
 
-Evaluare:
-- MAE pe split cronologic 80/20
+Evaluation:
+- MAE on a chronological 80/20 split
 
-## Structura proiectului
+## Project structure
 
 ```text
 fitness-ai-tracker-sda-final/
@@ -84,7 +84,7 @@ fitness-ai-tracker-sda-final/
     `-- seed.py
 ```
 
-## Instalare
+## Installation
 
 ```bash
 python -m venv .venv
@@ -92,32 +92,34 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-## Rulare
+## Running
 
 ```bash
 streamlit run app.py
 ```
 
-Aplicatia se deschide de obicei la:
+The app usually opens at:
 - [http://localhost:8501](http://localhost:8501)
 
-## Flux demo recomandat
+## Recommended demo flow
 
-1. Click pe `Incarca date Kaggle`
-2. Click pe `Antreneaza modelul AI`
-3. Intra in tab-ul `AI Coach`
-4. Selecteaza un exercitiu
-5. Arata recomandarea, progresul si comparatia intre modele
+Note: the Streamlit UI itself is still in Romanian, so the labels below are quoted exactly as they appear on screen.
 
-## Limitari
+1. Click `Incarca date Kaggle` ("Load Kaggle data")
+2. Click `Antreneaza modelul AI` ("Train AI model")
+3. Go to the `AI Coach` tab
+4. Select an exercise
+5. Show the recommendation, the progress chart, and the model comparison
 
-- un singur utilizator
-- unele exercitii cardio din dataset nu sunt utile pentru recomandare
-- modelul depinde de consistenta datelor istorice
+## Limitations
 
-## Idei de extensie
+- single user only
+- some cardio exercises from the dataset aren't useful for recommendations
+- the model depends on the consistency of historical data
 
-- upload de date exportate din alte aplicatii
-- autentificare multi-user
-- export PDF
-- deploy permanent in cloud
+## Extension ideas
+
+- upload data exported from other apps
+- multi-user authentication
+- PDF export
+- permanent cloud deployment
