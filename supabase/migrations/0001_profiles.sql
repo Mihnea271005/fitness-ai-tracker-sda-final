@@ -27,8 +27,11 @@ create policy "Users can update their own profile"
 -- No insert/delete policies: rows are created by the trigger below and removed
 -- with the auth user (on delete cascade).
 
--- Users may only change these columns (not id or timestamps).
-revoke update on public.profiles from authenticated;
+-- Explicit API access (the project has "automatically expose new tables" turned off).
+-- Signed-out visitors get nothing; signed-in users may read, and change only these
+-- columns (not id or timestamps). RLS above still limits them to their own row.
+revoke all on public.profiles from anon, authenticated;
+grant select on public.profiles to authenticated;
 grant update (display_name, unit, weekly_goal) on public.profiles to authenticated;
 
 create function public.touch_updated_at()
