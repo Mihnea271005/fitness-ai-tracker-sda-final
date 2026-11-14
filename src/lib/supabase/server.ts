@@ -1,11 +1,15 @@
 import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { supabaseEnv } from "./env";
 
 /** Supabase client for Server Components, Server Actions and Route Handlers. */
 export async function createClient() {
-  // Read cookies first: it marks the caller as request-time, so it is never prerendered.
+  // Wait for a real request before touching auth: with Partial Prefetching, cookies()
+  // alone can resolve while the app shell is prerendered, and Supabase's session
+  // check uses Date.now(). connection() stops prerendering here.
+  await connection();
   const cookieStore = await cookies();
   const { url, key } = supabaseEnv();
   return createServerClient(url, key, {
