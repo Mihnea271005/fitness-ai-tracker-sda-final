@@ -1,125 +1,79 @@
-# Fitness AI Tracker - SDA Academy Final Project
+# Fitness AI Tracker
 
-Python application with Streamlit and machine learning for tracking workouts and getting AI recommendations for the next session.
+A workout tracker for phone, tablet and desktop. You log strength, bodyweight, cardio and timed-hold exercises, and it suggests your next set from what you did last time. It's built as an installable web app (a PWA) using **Next.js 16, TypeScript and Tailwind CSS v4**. Accounts and data will come from **Supabase** (Postgres + Auth).
 
-This version uses the Kaggle dataset `joep89/weightlifting` as the seed/training source, replacing the synthetic generator used previously.
+> SDA Academy final project. The original Streamlit / FastAPI / Expo version is kept in [`legacy/`](legacy/).
 
-## What changed in this version
+## Status
 
-- synthetic seed data was replaced with an import from the real Kaggle dataset
-- the app's exercise list was expanded based on the dataset
-- exercise names are normalized to avoid obvious duplicates
-- weights from Kaggle are converted from pounds to kg
-- cardio rows or rows with `reps = 0` stay in the history, but are ignored by the AI component
+| Stage | What | State |
+|---|---|---|
+| 1 | Design and layout: every page, responsive, PWA, sample data | **Done** |
+| 2 | Accounts: email/password + Google sign-in (Supabase Auth), private data per user | Next |
+| 3 | Workout logging saved to Postgres, custom exercises, history, CSV export | Planned |
+| 4 | Next-set suggestions: progressive-overload rules with unit tests | Planned |
 
-## Features
+In stage 1 everything runs on sample data in [`src/lib/mock-data.ts`](src/lib/mock-data.ts). The workout logger already works. An in-progress workout is kept in the browser, so refreshing the page doesn't lose it, but "Finish" doesn't save anything yet.
 
-- manually add sets with date, exercise, reps, weight, and notes
-- local storage in SQLite
-- full history with CSV export
-- progress charts and personal records
-- train the AI model directly from the interface
-- weight + reps recommendation for the next session
-- stagnation / decline alerts
-- model comparison
-- explanations via feature importance
+## Running it
 
-## Dataset
+Requires Node.js 20 or later.
 
-Seed/training data source:
-- Kaggle: `joep89/weightlifting`
+```bash
+npm install
+npm run dev        # http://localhost:3000
+```
 
-CSV used in the project:
-- `data/weightlifting_721_workouts.csv`
+To try it on your phone, open `http://<your-computer's-LAN-IP>:3000` while the phone is on the same Wi-Fi.
 
-On load, the app maps the data as follows:
-- `Date` -> `workout_date`
-- `Exercise Name` -> `exercise`
-- `Set Order` -> `set_number`
-- `Reps` -> `reps`
-- `Weight` -> `weight` (converted from lb to kg)
-- `Notes` + `Workout Notes` -> `notes`
+| Command | Does |
+|---|---|
+| `npm run dev` | Start the development server |
+| `npm run build && npm start` | Production build, plus a service worker for the offline page |
+| `npm run lint` | ESLint |
+| `node scripts/make-icons.mjs` | Regenerate the app icons |
 
-## AI Component
+## Design
 
-Main model:
-- `RandomForestRegressor(n_estimators=150)`
+The visual design follows Apple's Human Interface Guidelines (the iOS 26 "Liquid Glass" design):
 
-Features:
-- `exercise`
-- `prev_max_weight`
-- `prev_avg_reps`
-- `prev_total_volume`
-- `prev_total_sets`
-- `prev_days_since_last`
-- `prev_session_count`
-- `prev_weight_trend_3`
+- **Colours:** system colours and semantic tokens (label, background, fill, separator) defined in [`src/app/globals.css`](src/app/globals.css). Light and dark mode follow the device setting, as the guidelines recommend, so there's no in-app switch. In light mode the accent is Apple's increased-contrast blue, so small blue text passes 4.5:1 contrast.
+- **Type:** the iOS Dynamic Type scale (Large Title 34, Body 17, …) in `rem`, so the browser's text-size setting scales everything. Fonts are the device's system fonts (San Francisco on Apple devices); big numbers use the rounded version.
+- **Layout:** a floating bottom tab bar on phones and a sidebar from tablet width (768 px) up. There are 5 tabs, each a single word. Starting a workout is a button, not a tab. Everything you can tap is at least 44 × 44 px, and the layout respects the notch and home-indicator areas.
+- **Glass:** the frosted "glass" look is used only on navigation (tab bar, sidebar, top bars, the workout-in-progress pill). Content sits on solid grouped lists. If the device asks for reduced transparency, the app uses solid backgrounds instead.
+- **Charts:** one data series each, a 2 px line, bars no wider than 24 px, hover/keyboard tooltips, and a "Show as table" view for every chart.
 
-Output:
-- recommended weight
-- recommended reps
+## Planned data model (stage 3)
 
-Evaluation:
-- MAE on a chronological 80/20 split
+```
+profiles           id (= auth user), display_name, unit (kg|lb), weekly_goal
+exercises          id, owner_id (null = built-in), name, kind, primary_muscle, equipment, weight_increment_kg
+workouts           id, user_id, title, started_at, ended_at, notes
+workout_exercises  id, workout_id, exercise_id, position, notes
+sets               id, workout_exercise_id, index, type, weight_kg, reps, duration_s, distance_m, rpe, completed
+```
+
+`kind` is one of `strength | bodyweight | cardio | timed`, and it decides which set fields are used. Weights are stored in kg. Database access rules (Postgres row-level security) restrict every row to its owner. The TypeScript types in [`src/lib/types.ts`](src/lib/types.ts) already match this model.
 
 ## Project structure
 
-```text
-fitness-ai-tracker-sda-final/
-|-- app.py
-|-- requirements.txt
-|-- README.md
-|-- data/
-|   |-- weightlifting_721_workouts.csv
-|   `-- seed_workouts.csv
-|-- models/
-|   `-- next_workout_model.joblib
-`-- src/
-    |-- __init__.py
-    |-- analytics.py
-    |-- constants.py
-    |-- database.py
-    |-- features.py
-    |-- model.py
-    `-- seed.py
 ```
-
-## Installation
-
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+src/
+  app/
+    page.tsx                landing page
+    (auth)/                 login, signup, forgot-password
+    (app)/                  signed-in app: home, workout, history, exercises, progress, settings
+    manifest.ts             PWA manifest
+  components/
+    ui/                     buttons, grouped lists, segmented control, sheet, page header
+    shell/                  sidebar + tab bar
+    workout/                active-workout state + logger
+    charts.tsx              line + bar charts
+  lib/
+    types.ts                domain types
+    mock-data.ts            stage 1 sample data
+    stats.ts                weekly totals, personal records, per-exercise history
+    suggest.ts              next-set suggestions (placeholder until stage 4)
+public/sw.js                service worker (offline fallback page only)
+legacy/                     previous Streamlit / FastAPI / Expo app
 ```
-
-## Running
-
-```bash
-streamlit run app.py
-```
-
-The app usually opens at:
-- [http://localhost:8501](http://localhost:8501)
-
-## Recommended demo flow
-
-Note: the Streamlit UI itself is still in Romanian, so the labels below are quoted exactly as they appear on screen.
-
-1. Click `Incarca date Kaggle` ("Load Kaggle data")
-2. Click `Antreneaza modelul AI` ("Train AI model")
-3. Go to the `AI Coach` tab
-4. Select an exercise
-5. Show the recommendation, the progress chart, and the model comparison
-
-## Limitations
-
-- single user only
-- some cardio exercises from the dataset aren't useful for recommendations
-- the model depends on the consistency of historical data
-
-## Extension ideas
-
-- upload data exported from other apps
-- multi-user authentication
-- PDF export
-- permanent cloud deployment
