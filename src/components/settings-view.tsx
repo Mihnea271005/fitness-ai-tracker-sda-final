@@ -1,33 +1,63 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { Download, LogOut, Moon, Ruler, Target, Timer, Trash2 } from "lucide-react";
-import { ListRow, ListSection } from "./ui/primitives";
-import { SegmentedControl, Toggle } from "./ui/interactive";
-import { profile } from "@/lib/mock-data";
-import type { Unit } from "@/lib/types";
+import { Button, ListRow, ListSection, TextField } from "./ui/primitives";
+import { SegmentedControl, Sheet, Toggle } from "./ui/interactive";
+import { deleteAccount, updateProfile, type ProfilePatch } from "@/app/(app)/settings/actions";
+import { signOut } from "@/app/(auth)/actions";
+import type { Profile, Unit } from "@/lib/types";
 
 function RowIcon({ bg, children }: { bg: string; children: React.ReactNode }) {
   return <span className={`inline-flex size-7 items-center justify-center rounded-[7px] text-white ${bg}`}>{children}</span>;
 }
 
-export function SettingsView() {
+export function SettingsView({ profile }: { profile: Profile }) {
+  const [name, setName] = useState(profile.displayName);
   const [unit, setUnit] = useState<Unit>(profile.unit);
   const [goal, setGoal] = useState(profile.weeklyGoal);
   const [restTimer, setRestTimer] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const [editingName, setEditingName] = useState(false);
+  const [draftName, setDraftName] = useState(profile.displayName);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  /** Optimistic: update the UI now, save in the background, roll back on failure. */
+  function save(patch: ProfilePatch, rollback: () => void) {
+    setError(null);
+    startTransition(async () => {
+      const res = await updateProfile(patch);
+      if (res.error) {
+        rollback();
+        setError(res.error);
+      }
+    });
+  }
 
   return (
     <>
+      {error && (
+        <p role="alert" className="mb-4 rounded-xl bg-red/15 px-4 py-3 text-subhead text-red-text">
+          {error}
+        </p>
+      )}
+
       <ListSection>
         <ListRow
           leading={
-            <span className="inline-flex size-14 items-center justify-center rounded-full bg-fill text-title2 font-semibold text-label-2">
-              {profile.displayName[0]}
+            <span className="inline-flex size-14 items-center justify-center rounded-full bg-fill text-title2 font-semibold text-label-2" aria-hidden>
+              {name[0]?.toUpperCase()}
             </span>
           }
-          title={<span className="text-title3 font-semibold">{profile.displayName}</span>}
+          title={<span className="text-title3 font-semibold">{name}</span>}
           subtitle={profile.email}
-          href="/settings"
+          trailing={<span className="text-accent">Edit</span>}
+          chevron={false}
+          onClick={() => {
+            setDraftName(name);
+            setEditingName(true);
+          }}
         />
       </ListSection>
 
@@ -43,7 +73,11 @@ export function SettingsView() {
             <SegmentedControl<Unit>
               label="Weight unit"
               value={unit}
-              onChange={setUnit}
+              onChange={(u) => {
+                const prev = unit;
+                setUnit(u);
+                save({ unit: u }, () => setUnit(prev));
+              }}
               className="w-32"
               options={[
                 { value: "kg", label: "kg" },
@@ -61,25 +95,26 @@ export function SettingsView() {
           title="Weekly goal"
           trailing={
             <span className="inline-flex items-center gap-1">
-              <button
-                type="button"
-                aria-label="Decrease weekly goal"
-                onClick={() => setGoal((g) => Math.max(1, g - 1))}
-                className="inline-flex size-11 items-center justify-center rounded-full text-title3 text-accent hover:bg-fill-3"
-              >
-                −
-              </button>
+              {[-1, 1].map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  aria-label={d < 0 ? "Decrease weekly goal" : "Increase weekly goal"}
+                  disabled={(d < 0 && goal <= 1) || (d > 0 && goal >= 7)}
+                  onClick={() => {
+                    const prev = goal;
+                    const next = goal + d;
+                    setGoal(next);
+                    save({ weeklyGoal: next }, () => setGoal(prev));
+                  }}
+                  className="inline-flex size-11 items-center justify-center rounded-full text-title3 text-accent hover:bg-fill-3 disabled:text-label-3 [&:nth-child(2)]:order-last"
+                >
+                  {d < 0 ? "−" : "+"}
+                </button>
+              ))}
               <span className="w-20 text-center text-body text-label tabular" aria-live="polite">
                 {goal} / week
               </span>
-              <button
-                type="button"
-                aria-label="Increase weekly goal"
-                onClick={() => setGoal((g) => Math.min(7, g + 1))}
-                className="inline-flex size-11 items-center justify-center rounded-full text-title3 text-accent hover:bg-fill-3"
-              >
-                +
-              </button>
             </span>
           }
         />
@@ -106,24 +141,82 @@ export function SettingsView() {
         />
       </ListSection>
 
-      <ListSection header="Your data">
+      <ListSection header="Your data" footer="Export arrives with workout saving (stage 3).">
         <ListRow
           leading={
             <RowIcon bg="bg-teal">
               <Download className="size-4" aria-hidden />
             </RowIcon>
           }
-          title="Export workouts (CSV)"
-          onClick={() => {}}
-          chevron
+          title={<span className="text-label-3">Export workouts (CSV)</span>}
         />
       </ListSection>
 
       <ListSection>
-        <ListRow leading={<LogOut className="size-5 text-red-text" aria-hidden />} title="Sign out" destructive onClick={() => {}} chevron={false} />
-        <ListRow leading={<Trash2 className="size-5 text-red-text" aria-hidden />} title="Delete account" destructive onClick={() => {}} chevron={false} />
+        <li>
+          <form action={signOut}>
+            <button type="submit" className="-ml-4 flex min-h-11 w-[calc(100%+1rem)] items-center gap-3 py-2.5 pr-4 pl-4 text-left text-body text-red-text hover:bg-fill-3">
+              <LogOut className="size-5" aria-hidden /> Sign out
+            </button>
+          </form>
+        </li>
+        <ListRow leading={<Trash2 className="size-5 text-red-text" aria-hidden />} title="Delete account" destructive onClick={() => setConfirmDelete(true)} chevron={false} />
       </ListSection>
-      <p className="text-center text-footnote text-label-2">Preview: settings are saved once accounts are connected (stage 2).</p>
+      {pending && <p className="sr-only" role="status">Saving…</p>}
+
+      <Sheet
+        open={editingName}
+        onClose={() => setEditingName(false)}
+        title="Your name"
+        footer={
+          <Button
+            className="w-full"
+            onClick={() => {
+              const prev = name;
+              const next = draftName.trim().slice(0, 60);
+              if (!next) return setError("Your name can't be empty.");
+              setName(next);
+              setEditingName(false);
+              save({ displayName: next }, () => setName(prev));
+            }}
+          >
+            Save
+          </Button>
+        }
+      >
+        <TextField label="Name" value={draftName} onChange={(e) => setDraftName(e.target.value)} maxLength={60} autoComplete="name" />
+      </Sheet>
+
+      <Sheet
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title="Delete your account?"
+        footer={
+          <div className="flex gap-2">
+            <Button variant="gray" className="flex-1" onClick={() => setConfirmDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  const res = await deleteAccount();
+                  if (res?.error) {
+                    setConfirmDelete(false);
+                    setError(res.error);
+                  }
+                })
+              }
+            >
+              {pending ? "Deleting…" : "Delete account"}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-body">This permanently deletes your account and all your workouts. It can&apos;t be undone.</p>
+      </Sheet>
     </>
   );
 }

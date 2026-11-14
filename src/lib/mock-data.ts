@@ -1,18 +1,11 @@
 // Stage 1 preview data. Deterministic (no Math.random / Date.now) so server and client
 // renders match. Replaced by Supabase queries in Stage 3.
 
-import type { Exercise, Profile, Workout, WorkoutExercise, WorkoutSet } from "./types";
+import type { Exercise, Workout, WorkoutExercise, WorkoutSet } from "./types";
 
 /** "Today" for the preview data set. */
 export const MOCK_TODAY = "2026-11-14T12:00:00.000Z";
 
-export const profile: Profile = {
-  id: "demo-user",
-  displayName: "Alex",
-  email: "alex@example.com",
-  unit: "kg",
-  weeklyGoal: 4,
-};
 
 export const exercises: Exercise[] = [
   // Strength

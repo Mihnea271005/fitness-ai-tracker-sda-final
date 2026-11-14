@@ -1,12 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import { Button, TextField } from "./ui/primitives";
+import {
+  requestPasswordReset,
+  signIn,
+  signInWithGoogle,
+  signUp,
+  updatePassword,
+  type AuthState,
+} from "@/app/(auth)/actions";
 
-// STAGE 1: the forms are real UI but don't talk to a server yet — submitting goes to the
-// preview. Stage 2 wires these to Supabase Auth (email/password + Google).
+type Mode = "login" | "signup" | "forgot" | "update";
 
 function GoogleLogo() {
   return (
@@ -19,91 +27,136 @@ function GoogleLogo() {
   );
 }
 
-export function AuthForm({ mode }: { mode: "login" | "signup" | "forgot" }) {
-  const router = useRouter();
-  const [sent, setSent] = useState(false);
+const ACTIONS: Record<Mode, (s: AuthState, f: FormData) => Promise<AuthState>> = {
+  login: signIn,
+  signup: signUp,
+  forgot: requestPasswordReset,
+  update: updatePassword,
+};
 
-  function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (mode === "forgot") setSent(true);
-    else router.push("/home");
-  }
+const COPY: Record<Mode, { title: string; subtitle: string; submit: string }> = {
+  login: { title: "Welcome back", subtitle: "Log in to continue your training.", submit: "Log in" },
+  signup: { title: "Create your account", subtitle: "Your workouts, saved to your account and private to you.", submit: "Create account" },
+  forgot: { title: "Reset your password", subtitle: "We'll email you a link to choose a new password.", submit: "Send reset link" },
+  update: { title: "Choose a new password", subtitle: "Use at least 8 characters.", submit: "Save password" },
+};
 
-  const title = mode === "login" ? "Welcome back" : mode === "signup" ? "Create your account" : "Reset your password";
-  const subtitle =
-    mode === "login"
-      ? "Log in to continue your training."
-      : mode === "signup"
-        ? "Your workouts, saved to your account and private to you."
-        : "We'll email you a link to choose a new password.";
+function SubmitButton({ children, variant = "filled" }: { children: React.ReactNode; variant?: "filled" | "gray" }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" size="large" variant={variant} disabled={pending} aria-busy={pending} className={variant === "gray" ? "w-full !bg-surface" : "mt-1 w-full"}>
+      {pending ? "Please wait…" : children}
+    </Button>
+  );
+}
+
+/** Reads ?next= and ?error= (URL data, so it streams in behind Suspense). */
+function NextField() {
+  const next = useSearchParams().get("next");
+  return next ? <input type="hidden" name="next" value={next} /> : null;
+}
+function UrlError() {
+  const error = useSearchParams().get("error");
+  return error ? <Alert kind="error">{error}</Alert> : null;
+}
+
+function Alert({ kind, children }: { kind: "error" | "info"; children: React.ReactNode }) {
+  return (
+    <p
+      role={kind === "error" ? "alert" : "status"}
+      className={kind === "error" ? "rounded-xl bg-red/15 px-4 py-3 text-subhead text-red-text" : "rounded-[var(--radius-cell)] bg-surface p-4 text-center text-body"}
+    >
+      {children}
+    </p>
+  );
+}
+
+export function AuthForm({ mode }: { mode: Mode }) {
+  const [state, action] = useActionState(ACTIONS[mode], {});
+  const copy = COPY[mode];
 
   return (
     <div>
-      <h1 className="text-center text-title1 font-bold">{title}</h1>
-      <p className="mt-1 mb-6 text-center text-subhead text-label-2">{subtitle}</p>
+      <h1 className="text-center text-title1 font-bold">{copy.title}</h1>
+      <p className="mt-1 mb-6 text-center text-subhead text-label-2">{copy.subtitle}</p>
 
-      {mode !== "forgot" && (
+      <Suspense fallback={null}>
+        <div className="mb-4 empty:hidden">
+          <UrlError />
+        </div>
+      </Suspense>
+
+      {(mode === "login" || mode === "signup") && (
         <>
-          <Button variant="gray" size="large" className="w-full !bg-surface" onClick={() => router.push("/home")}>
-            <GoogleLogo /> Continue with Google
-          </Button>
+          <form action={signInWithGoogle}>
+            <Suspense fallback={null}>
+              <NextField />
+            </Suspense>
+            <SubmitButton variant="gray">
+              <GoogleLogo /> Continue with Google
+            </SubmitButton>
+          </form>
           <div className="my-5 flex items-center gap-3 text-footnote text-label-2">
             <span className="h-px flex-1 bg-separator" /> or <span className="h-px flex-1 bg-separator" />
           </div>
         </>
       )}
 
-      {sent ? (
-        <p role="status" className="rounded-[var(--radius-cell)] bg-surface p-4 text-center text-body">
-          If an account exists for that email, a reset link is on its way.
-        </p>
+      {state.message ? (
+        <Alert kind="info">{state.message}</Alert>
       ) : (
-        <form onSubmit={onSubmit} className="flex flex-col gap-4">
-          {mode === "signup" && <TextField label="Name" name="name" autoComplete="name" required />}
-          <TextField label="Email" name="email" type="email" autoComplete="email" inputMode="email" required />
+        <form action={action} className="flex flex-col gap-4" noValidate={false}>
+          <Suspense fallback={null}>
+            <NextField />
+          </Suspense>
+          {state.error && <Alert kind="error">{state.error}</Alert>}
+          {mode === "signup" && <TextField label="Name" name="name" autoComplete="name" defaultValue={state.values?.name} maxLength={60} required />}
+          {mode !== "update" && (
+            <TextField label="Email" name="email" type="email" autoComplete="email" inputMode="email" defaultValue={state.values?.email} required />
+          )}
           {mode !== "forgot" && (
             <TextField
-              label="Password"
+              label={mode === "update" ? "New password" : "Password"}
               name="password"
               type="password"
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
-              minLength={8}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              minLength={mode === "login" ? undefined : 8}
               required
             />
           )}
+          {mode === "update" && <TextField label="Confirm new password" name="confirm" type="password" autoComplete="new-password" minLength={8} required />}
           {mode === "login" && (
-            <Link href="/forgot-password" className="-mt-2 self-end text-subhead text-accent">
+            <Link href="/forgot-password" className="-mt-2 inline-flex min-h-11 items-center self-end text-subhead text-accent">
               Forgot password?
             </Link>
           )}
-          <Button type="submit" size="large" className="mt-1 w-full">
-            {mode === "login" ? "Log in" : mode === "signup" ? "Create account" : "Send reset link"}
-          </Button>
+          <SubmitButton>{copy.submit}</SubmitButton>
         </form>
       )}
 
-      <p className="mt-6 text-center text-subhead text-label-2">
-        {mode === "login" ? (
-          <>
-            New here?{" "}
-            <Link href="/signup" className="font-semibold text-accent">
-              Create an account
-            </Link>
-          </>
-        ) : mode === "signup" ? (
-          <>
-            Already have an account?{" "}
+      {mode !== "update" && (
+        <p className="mt-6 text-center text-subhead text-label-2">
+          {mode === "login" ? (
+            <>
+              New here?{" "}
+              <Link href="/signup" className="font-semibold text-accent">
+                Create an account
+              </Link>
+            </>
+          ) : mode === "signup" ? (
+            <>
+              Already have an account?{" "}
+              <Link href="/login" className="font-semibold text-accent">
+                Log in
+              </Link>
+            </>
+          ) : (
             <Link href="/login" className="font-semibold text-accent">
-              Log in
+              Back to log in
             </Link>
-          </>
-        ) : (
-          <Link href="/login" className="font-semibold text-accent">
-            Back to log in
-          </Link>
-        )}
-      </p>
-      <p className="mt-6 rounded-xl bg-fill-3 px-3 py-2 text-center text-footnote text-label-2">Preview: sign-in is connected in stage 2.</p>
+          )}
+        </p>
+      )}
     </div>
   );
 }

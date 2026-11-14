@@ -1,17 +1,28 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import { getCurrentUser } from "@/lib/auth";
 import { Flame, Play, Timer, Trophy, Weight } from "lucide-react";
 import { PageHeader } from "@/components/ui/interactive";
 import { ButtonLink, Card, ListSection, SectionTitle, StatTile } from "@/components/ui/primitives";
 import { GoalRing } from "@/components/goal-ring";
 import { WorkoutRow } from "@/components/workout-row";
 import { ExerciseIcon } from "@/components/exercise-icon";
-import { MOCK_TODAY, exerciseMap, profile, workouts } from "@/lib/mock-data";
+import { MOCK_TODAY, exerciseMap, workouts } from "@/lib/mock-data";
 import { formatCompact, formatDate, formatLongDuration, formatSet } from "@/lib/format";
 import { personalRecords, weekStreak, weeklySummaries } from "@/lib/stats";
 
 export const metadata = { title: "Home" };
 
 export default function HomePage() {
+  return (
+    <Suspense fallback={<PageHeader title="Home" />}>
+      <Home />
+    </Suspense>
+  );
+}
+
+async function Home() {
+  const profile = await getCurrentUser();
   const weeks = weeklySummaries(workouts, exerciseMap, MOCK_TODAY, 12);
   const thisWeek = weeks[weeks.length - 1];
   const lastWeek = weeks[weeks.length - 2];

@@ -45,8 +45,8 @@ export default function Landing() {
             <ButtonLink href="/signup" size="large" className="w-full sm:w-auto">
               Get started, it&apos;s free
             </ButtonLink>
-            <ButtonLink href="/home" variant="gray" size="large" className="w-full sm:w-auto">
-              Preview the app
+            <ButtonLink href="/login" variant="gray" size="large" className="w-full sm:w-auto">
+              Log in
             </ButtonLink>
           </div>
         </section>
