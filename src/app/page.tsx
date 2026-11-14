@@ -81,7 +81,7 @@ export default function Landing() {
         </section>
       </main>
 
-      <footer className="pb-[calc(2rem+env(safe-area-inset-bottom))] text-center text-footnote text-label-2">SDA Academy final project</footer>
+      <footer className="pb-[calc(2rem+env(safe-area-inset-bottom))] text-center text-footnote text-label-2">Fitness AI Tracker</footer>
     </div>
   );
 }

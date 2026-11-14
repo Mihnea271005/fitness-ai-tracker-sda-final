@@ -2,7 +2,7 @@
 
 A workout tracker for phone, tablet and desktop. You log strength, bodyweight, cardio and timed-hold exercises, and it suggests your next set from what you did last time. It's built as an installable web app (a PWA) using **Next.js 16, TypeScript and Tailwind CSS v4**. Accounts and data will come from **Supabase** (Postgres + Auth).
 
-> SDA Academy final project. The original Streamlit / FastAPI / Expo version is kept in [`legacy/`](legacy/).
+> The original Streamlit / FastAPI / Expo version is kept in [`legacy/`](legacy/).
 
 ## Status
 
