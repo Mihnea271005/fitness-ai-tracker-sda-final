@@ -3,20 +3,19 @@
 import { useState } from "react";
 import { Search } from "lucide-react";
 import { ExerciseIcon } from "./exercise-icon";
-import { Badge, ListRow, ListSection } from "./ui/primitives";
+import { ListRow, ListSection } from "./ui/primitives";
 import { SegmentedControl } from "./ui/interactive";
-import { exercises } from "@/lib/mock-data";
 import { exerciseMeta } from "@/lib/format";
 import type { Exercise, ExerciseKind } from "@/lib/types";
 
 type Filter = "all" | ExerciseKind;
 
-export function ExerciseLibrary() {
+export function ExerciseLibrary({ exercises }: { exercises: Exercise[] }) {
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<Filter>("all");
 
   const list = exercises
-    .filter((e) => (kind === "all" || e.kind === kind) && e.name.toLowerCase().includes(q.trim().toLowerCase()))
+    .filter((e) => !e.archived && (kind === "all" || e.kind === kind) && e.name.toLowerCase().includes(q.trim().toLowerCase()))
     .sort((a, b) => a.name.localeCompare(b.name));
   const custom = list.filter((e) => e.ownerId);
   const builtIn = list.filter((e) => !e.ownerId);
@@ -28,18 +27,7 @@ export function ExerciseLibrary() {
   }
 
   const row = (e: Exercise) => (
-    <ListRow
-      key={e.id}
-      href={`/exercises/${e.id}`}
-      leading={<ExerciseIcon kind={e.kind} />}
-      title={
-        <span className="flex items-center gap-2">
-          {e.name}
-          {e.ownerId && <Badge>Custom</Badge>}
-        </span>
-      }
-      subtitle={exerciseMeta(e)}
-    />
+    <ListRow key={e.id} href={`/exercises/${e.id}`} leading={<ExerciseIcon kind={e.kind} />} title={e.name} subtitle={exerciseMeta(e)} />
   );
 
   return (

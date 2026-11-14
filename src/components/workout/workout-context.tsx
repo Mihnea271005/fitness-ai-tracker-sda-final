@@ -1,7 +1,8 @@
 "use client";
 
-// Active-workout state. Kept in this browser (localStorage) so a refresh or a closed tab
-// doesn't lose a half-logged session. In Stage 3 "Finish" writes it to Supabase.
+// Active-workout state. Kept in this browser (localStorage) while you train, so a
+// refresh or a closed tab doesn't lose a half-logged session. "Finish" saves it to
+// the database and clears it.
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { SetType } from "@/lib/types";
@@ -19,6 +20,8 @@ export interface DraftSet {
 export interface DraftExercise {
   id: string;
   exerciseId: string;
+  restSeconds?: number;
+  targetReps?: number;
   sets: DraftSet[];
 }
 
@@ -29,7 +32,14 @@ export interface ActiveWorkout {
   exercises: DraftExercise[];
 }
 
-const KEY = "active-workout-v1";
+export interface StartExercise {
+  exerciseId: string;
+  sets: number;
+  restSeconds?: number;
+  targetReps?: number;
+}
+
+const KEY = "active-workout-v2"; // v1 drafts referenced stage-1 sample ids
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -41,7 +51,9 @@ function emptySet(): DraftSet {
 
 interface Ctx {
   workout: ActiveWorkout | null;
-  start: (title: string, exercises?: { exerciseId: string; sets: number }[]) => void;
+  loaded: boolean;
+  start: (title: string, exercises?: StartExercise[]) => void;
+  rename: (title: string) => void;
   addExercise: (exerciseId: string) => void;
   removeExercise: (id: string) => void;
   addSet: (exId: string) => void;
@@ -58,6 +70,7 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
+      localStorage.removeItem("active-workout-v1");
       const raw = localStorage.getItem(KEY);
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time hydration from browser storage
       if (raw) setWorkout(JSON.parse(raw));
@@ -82,12 +95,20 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
   const value = useMemo<Ctx>(
     () => ({
       workout,
+      loaded,
       start: (title, exercises = []) =>
         setWorkout({
           title,
           startedAt: new Date().toISOString(),
-          exercises: exercises.map((e) => ({ id: uid(), exerciseId: e.exerciseId, sets: Array.from({ length: Math.max(e.sets, 1) }, emptySet) })),
+          exercises: exercises.map((e) => ({
+            id: uid(),
+            exerciseId: e.exerciseId,
+            restSeconds: e.restSeconds,
+            targetReps: e.targetReps,
+            sets: Array.from({ length: Math.max(e.sets, 1) }, emptySet),
+          })),
         }),
+      rename: (title) => mutate((w) => ({ ...w, title })),
       addExercise: (exerciseId) => mutate((w) => ({ ...w, exercises: [...w.exercises, { id: uid(), exerciseId, sets: [emptySet()] }] })),
       removeExercise: (id) => mutate((w) => ({ ...w, exercises: w.exercises.filter((e) => e.id !== id) })),
       addSet: (exId) =>
@@ -113,7 +134,7 @@ export function WorkoutProvider({ children }: { children: ReactNode }) {
         mutate((w) => ({ ...w, exercises: w.exercises.map((e) => (e.id !== exId ? e : { ...e, sets: e.sets.filter((s) => s.id !== setId) })) })),
       discard: () => setWorkout(null),
     }),
-    [workout, mutate],
+    [workout, loaded, mutate],
   );
 
   return <WorkoutContext.Provider value={value}>{children}</WorkoutContext.Provider>;

@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { hasSupabaseEnv, supabaseEnv } from "./env";
 
-const APP_PATHS = ["/home", "/workout", "/history", "/exercises", "/progress", "/settings", "/update-password"];
+const APP_PATHS = ["/home", "/workout", "/history", "/exercises", "/progress", "/settings", "/update-password", "/routines", "/body", "/export"];
 const AUTH_PATHS = ["/login", "/signup", "/forgot-password"];
 
 const matches = (path: string, list: string[]) => list.some((p) => path === p || path.startsWith(p + "/"));

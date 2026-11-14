@@ -6,6 +6,7 @@ import { Button, ListRow, ListSection, TextField } from "./ui/primitives";
 import { SegmentedControl, Sheet, Toggle } from "./ui/interactive";
 import { deleteAccount, updateProfile, type ProfilePatch } from "@/app/(app)/settings/actions";
 import { signOut } from "@/app/(auth)/actions";
+import { deleteAllWorkouts } from "@/app/(app)/workout/actions";
 import type { Profile, Unit } from "@/lib/types";
 
 function RowIcon({ bg, children }: { bg: string; children: React.ReactNode }) {
@@ -22,6 +23,7 @@ export function SettingsView({ profile }: { profile: Profile }) {
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(profile.displayName);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmWipe, setConfirmWipe] = useState(false);
 
   /** Optimistic: update the UI now, save in the background, roll back on failure. */
   function save(patch: ProfilePatch, rollback: () => void) {
@@ -141,14 +143,28 @@ export function SettingsView({ profile }: { profile: Profile }) {
         />
       </ListSection>
 
-      <ListSection header="Your data" footer="Export arrives with workout saving (stage 3).">
-        <ListRow
-          leading={
+      <ListSection header="Your data" footer="The export opens in Excel, Numbers or Google Sheets: one row per set.">
+        <li>
+          <a
+            href="/export/workouts.csv"
+            download
+            className="-ml-4 flex min-h-11 items-center gap-3 py-2.5 pr-4 pl-4 text-body transition-colors hover:bg-fill-3 active:bg-fill-2"
+          >
             <RowIcon bg="bg-teal">
               <Download className="size-4" aria-hidden />
             </RowIcon>
+            <span className="flex-1">Export workouts (CSV)</span>
+          </a>
+        </li>
+        <ListRow
+          leading={
+            <RowIcon bg="bg-red">
+              <Trash2 className="size-4" aria-hidden />
+            </RowIcon>
           }
-          title={<span className="text-label-3">Export workouts (CSV)</span>}
+          title="Delete all workouts"
+          onClick={() => setConfirmWipe(true)}
+          chevron={false}
         />
       </ListSection>
 
@@ -185,6 +201,40 @@ export function SettingsView({ profile }: { profile: Profile }) {
         }
       >
         <TextField label="Name" value={draftName} onChange={(e) => setDraftName(e.target.value)} maxLength={60} autoComplete="name" />
+      </Sheet>
+
+      <Sheet
+        open={confirmWipe}
+        onClose={() => setConfirmWipe(false)}
+        title="Delete all workouts?"
+        footer={
+          <div className="flex gap-2">
+            <Button variant="gray" className="flex-1" onClick={() => setConfirmWipe(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  const res = await deleteAllWorkouts();
+                  if (res?.error) {
+                    setConfirmWipe(false);
+                    setError(res.error);
+                  }
+                })
+              }
+            >
+              {pending ? "Deleting…" : "Delete all"}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-body">
+          Every workout and set in your history is permanently deleted. Your account, exercises, routines and body measurements stay. Export a CSV first if you
+          want a copy.
+        </p>
       </Sheet>
 
       <Sheet

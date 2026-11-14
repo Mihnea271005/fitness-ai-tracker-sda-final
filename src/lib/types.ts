@@ -1,5 +1,4 @@
-// Domain types. These mirror the planned Postgres schema so Stage 3 can swap the
-// mock data for Supabase queries without touching the UI.
+// Domain types, mapped from the Postgres schema in supabase/migrations.
 
 export type ExerciseKind = "strength" | "bodyweight" | "cardio" | "timed";
 
@@ -28,16 +27,23 @@ export type Muscle =
   | "full body"
   | "cardio";
 
+export const MUSCLES: Muscle[] = ["chest", "back", "shoulders", "biceps", "triceps", "quads", "hamstrings", "glutes", "calves", "core", "full body", "cardio"];
+export const EQUIPMENT: Equipment[] = ["barbell", "dumbbell", "machine", "cable", "kettlebell", "bodyweight", "band", "cardio machine", "none"];
+export const KINDS: ExerciseKind[] = ["strength", "bodyweight", "cardio", "timed"];
+
 export interface Exercise {
   id: string;
   /** null = built-in exercise; otherwise the id of the user who created it */
   ownerId: string | null;
+  /** stable key for built-in exercises */
+  slug: string | null;
   name: string;
   kind: ExerciseKind;
   primaryMuscle: Muscle;
   equipment: Equipment;
   /** smallest load jump used by suggestions, in kg */
   weightIncrementKg: number;
+  archived: boolean;
 }
 
 export type SetType = "warmup" | "working" | "drop" | "failure";
@@ -69,6 +75,33 @@ export interface Workout {
   endedAt: string; // ISO
   notes?: string;
   exercises: WorkoutExercise[];
+}
+
+export interface RoutineExercise {
+  exerciseId: string;
+  targetSets: number;
+  targetReps?: number;
+  restSeconds: number;
+}
+
+export interface Routine {
+  id: string;
+  name: string;
+  notes?: string;
+  exercises: RoutineExercise[];
+}
+
+export interface BodyMeasurement {
+  id: string;
+  measuredOn: string; // YYYY-MM-DD
+  weightKg?: number;
+  bodyFatPct?: number;
+  waistCm?: number;
+  chestCm?: number;
+  hipsCm?: number;
+  armCm?: number;
+  thighCm?: number;
+  notes?: string;
 }
 
 export type Unit = "kg" | "lb";

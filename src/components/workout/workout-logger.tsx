@@ -2,36 +2,49 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { Check, Ellipsis, Plus, Search, Sparkles, Timer, Trash2 } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { Check, Ellipsis, Pencil, Plus, Sparkles, Timer, Trash2 } from "lucide-react";
 import { ExerciseIcon } from "../exercise-icon";
-import { Button, ListRow, ListSection, cn } from "../ui/primitives";
-import { PageHeader, SegmentedControl, Sheet } from "../ui/interactive";
-import { useActiveWorkout, useElapsed, type DraftExercise, type DraftSet } from "./workout-context";
-import { exerciseMap, exercises as allExercises, workouts } from "@/lib/mock-data";
-import { KIND_LABEL, formatDuration, formatSet } from "@/lib/format";
+import { ExercisePicker } from "../exercise-picker";
+import { Button, ListRow, ListSection, TextField, cn } from "../ui/primitives";
+import { PageHeader, Sheet } from "../ui/interactive";
+import { useActiveWorkout, useElapsed, type DraftExercise, type DraftSet, type StartExercise } from "./workout-context";
+import { saveWorkout } from "@/app/(app)/workout/actions";
+import { KIND_LABEL, formatDuration, formatSet, fromDisplayWeight, toDisplayWeight } from "@/lib/format";
 import { lastSessionSets, suggestFirstSet } from "@/lib/suggest";
-import type { Exercise, ExerciseKind, WorkoutSet } from "@/lib/types";
+import type { Exercise, ExerciseKind, Routine, Unit, Workout, WorkoutSet } from "@/lib/types";
 
 /* ------------------------------------------------------------------ field config per kind */
 
+type ValueKey = "weightKg" | "reps" | "durationS" | "distanceM";
+
 interface FieldDef {
-  key: "weightKg" | "reps" | "durationS" | "distanceM";
+  key: ValueKey;
   label: string;
-  /** state value → input value */
+  /** stored value → text in the input */
   toInput: (v: number | undefined) => string;
-  /** input value → state value */
+  /** text in the input → stored value */
   fromInput: (s: string) => number | undefined;
   decimal: boolean;
 }
 
-const num = (s: string) => (s.trim() === "" || Number.isNaN(Number(s)) ? undefined : Number(s));
+const num = (s: string) => {
+  const t = s.trim().replace(",", ".");
+  return t === "" || Number.isNaN(Number(t)) ? undefined : Number(t);
+};
 const plain = (v: number | undefined) => (v === undefined ? "" : String(v));
 
-const KG: FieldDef = { key: "weightKg", label: "kg", toInput: plain, fromInput: num, decimal: true };
-const ADDED_KG: FieldDef = { ...KG, label: "+kg" };
+function weightField(unit: Unit, added: boolean): FieldDef {
+  return {
+    key: "weightKg",
+    label: added ? `+${unit}` : unit,
+    toInput: (v) => (v === undefined ? "" : String(toDisplayWeight(v, unit))),
+    fromInput: (s) => (num(s) === undefined ? undefined : fromDisplayWeight(num(s)!, unit)),
+    decimal: true,
+  };
+}
 const REPS: FieldDef = { key: "reps", label: "Reps", toInput: plain, fromInput: (s) => (num(s) === undefined ? undefined : Math.round(num(s)!)), decimal: false };
-const SECONDS: FieldDef = { key: "durationS", label: "Sec", toInput: plain, fromInput: num, decimal: false };
+const SECONDS: FieldDef = { key: "durationS", label: "Sec", toInput: plain, fromInput: (s) => (num(s) === undefined ? undefined : Math.round(num(s)!)), decimal: false };
 const KM: FieldDef = {
   key: "distanceM",
   label: "km",
@@ -47,12 +60,18 @@ const MINUTES: FieldDef = {
   decimal: true,
 };
 
-const FIELDS: Record<ExerciseKind, [FieldDef, FieldDef]> = {
-  strength: [KG, REPS],
-  bodyweight: [ADDED_KG, REPS],
-  timed: [ADDED_KG, SECONDS],
-  cardio: [KM, MINUTES],
-};
+function fieldsFor(kind: ExerciseKind, unit: Unit): [FieldDef, FieldDef] {
+  switch (kind) {
+    case "strength":
+      return [weightField(unit, false), REPS];
+    case "bodyweight":
+      return [weightField(unit, true), REPS];
+    case "timed":
+      return [weightField(unit, true), SECONDS];
+    case "cardio":
+      return [KM, MINUTES];
+  }
+}
 
 /** The numbers actually typed into a set (so the next row can suggest repeating them). */
 function enteredValues(s: DraftSet): Partial<WorkoutSet> {
@@ -61,7 +80,7 @@ function enteredValues(s: DraftSet): Partial<WorkoutSet> {
   return out;
 }
 
-const GRID ="grid grid-cols-[2.25rem_minmax(0,1fr)_4.25rem_4.25rem_2.75rem] items-center gap-1.5 sm:grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_5.5rem_2.75rem] sm:gap-2";
+const GRID = "grid grid-cols-[2.25rem_minmax(0,1fr)_4.25rem_4.25rem_2.75rem] items-center gap-1.5 sm:grid-cols-[2.5rem_minmax(0,1fr)_5.5rem_5.5rem_2.75rem] sm:gap-2";
 
 /* ------------------------------------------------------------------ set row */
 
@@ -69,6 +88,7 @@ function SetRow({
   number,
   set,
   kind,
+  unit,
   previous,
   placeholder,
   onChange,
@@ -77,12 +97,13 @@ function SetRow({
   number: number;
   set: DraftSet;
   kind: ExerciseKind;
+  unit: Unit;
   previous?: WorkoutSet;
   placeholder?: Partial<WorkoutSet>;
   onChange: (patch: Partial<DraftSet>) => void;
   onRemove: () => void;
 }) {
-  const fields = FIELDS[kind];
+  const fields = fieldsFor(kind, unit);
 
   function toggleComplete() {
     if (set.completed) return onChange({ completed: false });
@@ -104,7 +125,7 @@ function SetRow({
         <span className="group-hover:hidden">{number}</span>
         <Trash2 className="hidden size-4 group-hover:block" aria-hidden />
       </button>
-      <div className="truncate text-subhead text-label-2 tabular">{previous ? formatSet(previous, kind) : "–"}</div>
+      <div className="truncate text-subhead text-label-2 tabular">{previous ? formatSet(previous, kind, unit) : "–"}</div>
       {fields.map((f) => (
         <input
           key={f.key + f.label}
@@ -139,12 +160,13 @@ function SetRow({
 
 /* ------------------------------------------------------------------ exercise card */
 
-function ExerciseCard({ entry, exercise }: { entry: DraftExercise; exercise: Exercise }) {
+function ExerciseCard({ entry, exercise, history, unit }: { entry: DraftExercise; exercise: Exercise; history: Workout[]; unit: Unit }) {
   const { addSet, updateSet, removeSet, removeExercise } = useActiveWorkout();
   const [menu, setMenu] = useState(false);
-  const last = useMemo(() => lastSessionSets(workouts, exercise.id), [exercise.id]);
-  const suggestion = useMemo(() => suggestFirstSet(exercise, last), [exercise, last]);
-  const fields = FIELDS[exercise.kind];
+  const last = useMemo(() => lastSessionSets(history, exercise.id), [history, exercise.id]);
+  const suggestion = useMemo(() => suggestFirstSet(exercise, last, unit), [exercise, last, unit]);
+  const fields = fieldsFor(exercise.kind, unit);
+  const firstPlaceholder = suggestion?.values ?? (entry.targetReps ? { reps: entry.targetReps } : undefined);
 
   return (
     <section aria-label={exercise.name} className="mb-4 rounded-[var(--radius-card)] bg-surface p-3 sm:p-4">
@@ -154,7 +176,10 @@ function ExerciseCard({ entry, exercise }: { entry: DraftExercise; exercise: Exe
           <Link href={`/exercises/${exercise.id}`} className="block truncate text-headline font-semibold hover:underline">
             {exercise.name}
           </Link>
-          <div className="text-footnote text-label-2">{KIND_LABEL[exercise.kind]}</div>
+          <div className="text-footnote text-label-2">
+            {KIND_LABEL[exercise.kind]}
+            {entry.restSeconds ? ` · rest ${formatDuration(entry.restSeconds)}` : ""}
+          </div>
         </div>
         <div className="relative">
           <button
@@ -208,8 +233,9 @@ function ExerciseCard({ entry, exercise }: { entry: DraftExercise; exercise: Exe
             number={i + 1}
             set={s}
             kind={exercise.kind}
+            unit={unit}
             previous={last[i]}
-            placeholder={i === 0 ? suggestion?.values : { ...suggestion?.values, ...enteredValues(entry.sets[i - 1]) }}
+            placeholder={i === 0 ? firstPlaceholder : { ...firstPlaceholder, ...enteredValues(entry.sets[i - 1]) }}
             onChange={(patch) => updateSet(entry.id, s.id, patch)}
             onRemove={() => removeSet(entry.id, s.id)}
           />
@@ -223,102 +249,116 @@ function ExerciseCard({ entry, exercise }: { entry: DraftExercise; exercise: Exe
   );
 }
 
-/* ------------------------------------------------------------------ add-exercise sheet */
+/* ------------------------------------------------------------------ empty state */
 
-function AddExerciseSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { addExercise } = useActiveWorkout();
-  const [q, setQ] = useState("");
-  const [kind, setKind] = useState<"all" | ExerciseKind>("all");
-  const list = allExercises.filter((e) => (kind === "all" || e.kind === kind) && e.name.toLowerCase().includes(q.toLowerCase()));
+function EmptyState({ routines, history, exercises }: { routines: Routine[]; history: Workout[]; exercises: Map<string, Exercise> }) {
+  const { start } = useActiveWorkout();
+  const names = (ids: string[]) => ids.map((id) => exercises.get(id)?.name).filter(Boolean).join(", ");
+
+  // The three most recent distinct workout titles, to repeat in one tap.
+  const recent: Workout[] = [];
+  for (const w of history) {
+    if (recent.length === 3) break;
+    if (!recent.some((r) => r.title === w.title)) recent.push(w);
+  }
+  const fromWorkout = (w: Workout): StartExercise[] =>
+    w.exercises.filter((e) => exercises.has(e.exerciseId)).map((e) => ({ exerciseId: e.exerciseId, sets: e.sets.filter((s) => s.type !== "warmup").length }));
 
   return (
-    <Sheet open={open} onClose={onClose} title="Add exercise">
-      <label className="mb-3 flex min-h-11 items-center gap-2 rounded-xl bg-fill-3 px-3">
-        <Search className="size-4 text-label-2" aria-hidden />
-        <span className="sr-only">Search exercises</span>
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search" className="h-11 flex-1 bg-transparent text-body outline-none placeholder:text-label-2" />
-      </label>
-      <div className="no-scrollbar mb-3 overflow-x-auto">
-        <SegmentedControl
-          label="Exercise type"
-          value={kind}
-          onChange={setKind}
-          className="min-w-max"
-          options={[
-            { value: "all", label: "All" },
-            { value: "strength", label: "Strength" },
-            { value: "bodyweight", label: "Bodyweight" },
-            { value: "cardio", label: "Cardio" },
-            { value: "timed", label: "Timed" },
-          ]}
-        />
-      </div>
-      <ListSection className="mb-2">
-        {list.map((e) => (
-          <ListRow
-            key={e.id}
-            leading={<ExerciseIcon kind={e.kind} size="sm" />}
-            title={e.name}
-            subtitle={`${KIND_LABEL[e.kind]} · ${e.primaryMuscle}`}
-            chevron={false}
-            trailing={<Plus className="size-5 text-accent" aria-hidden />}
-            onClick={() => {
-              addExercise(e.id);
-              onClose();
-            }}
-          />
+    <>
+      <PageHeader title="Workout" subtitle="Start from scratch, a routine, or a recent session." />
+      <Button size="large" className="mb-8 w-full" onClick={() => start("Workout")}>
+        <Plus className="size-5" strokeWidth={2.75} aria-hidden /> Start empty workout
+      </Button>
+
+      <ListSection
+        header="My routines"
+        footer={
+          <Link href="/routines/new" className="inline-flex min-h-11 items-center text-subhead text-accent">
+            <Plus className="mr-1 size-4" aria-hidden /> New routine
+          </Link>
+        }
+      >
+        {routines.map((r) => (
+          <li key={r.id} className="flex items-center pr-2">
+            <button
+              type="button"
+              onClick={() =>
+                start(
+                  r.name,
+                  r.exercises
+                    .filter((e) => exercises.has(e.exerciseId))
+                    .map((e) => ({ exerciseId: e.exerciseId, sets: e.targetSets, restSeconds: e.restSeconds, targetReps: e.targetReps })),
+                )
+              }
+              className="-ml-4 min-h-11 min-w-0 flex-1 py-2.5 pr-2 pl-4 text-left transition-colors hover:bg-fill-3 active:bg-fill-2"
+            >
+              <span className="block truncate text-body">{r.name}</span>
+              <span className="block truncate text-subhead text-label-2">{names(r.exercises.map((e) => e.exerciseId)) || "No exercises"}</span>
+            </button>
+            <Link
+              href={`/routines/${r.id}`}
+              aria-label={`Edit ${r.name}`}
+              className="inline-flex size-11 shrink-0 items-center justify-center rounded-full text-accent hover:bg-fill-3"
+            >
+              <Pencil className="size-4" aria-hidden />
+            </Link>
+          </li>
         ))}
-        {!list.length && <li className="py-6 text-center text-subhead text-label-2">No exercises match “{q}”.</li>}
+        {!routines.length && <li className="py-4 pr-4 text-subhead text-label-2">No routines yet. Save one from a workout, or create one.</li>}
       </ListSection>
-      <Link href="/exercises/new" className="inline-flex min-h-11 items-center text-subhead text-accent">
-        Create a custom exercise
-      </Link>
-    </Sheet>
+
+      {recent.length > 0 && (
+        <ListSection header="Repeat a recent workout" footer="Sets start empty. The suggested numbers come from your last session.">
+          {recent.map((w) => (
+            <ListRow key={w.id} title={w.title} subtitle={names(w.exercises.map((e) => e.exerciseId))} onClick={() => start(w.title, fromWorkout(w))} chevron />
+          ))}
+        </ListSection>
+      )}
+    </>
   );
 }
 
 /* ------------------------------------------------------------------ page body */
 
-const TEMPLATES = ["Push", "Pull", "Legs"].map((title) => {
-  const w = workouts.find((x) => x.title === title)!;
-  return { title, exercises: w.exercises.map((e) => ({ exerciseId: e.exerciseId, sets: e.sets.filter((s) => s.type !== "warmup").length })) };
-});
-
-function EmptyState() {
-  const { start } = useActiveWorkout();
-  return (
-    <>
-      <PageHeader title="Workout" subtitle="Start from scratch or repeat a recent session." />
-      <Button size="large" className="mb-8 w-full" onClick={() => start("Workout")}>
-        <Plus className="size-5" strokeWidth={2.75} aria-hidden /> Start empty workout
-      </Button>
-      <ListSection header="Repeat a recent workout" footer="Sets start empty. The suggested numbers come from your last session.">
-        {TEMPLATES.map((t) => (
-          <ListRow
-            key={t.title}
-            title={t.title}
-            subtitle={t.exercises.map((e) => exerciseMap.get(e.exerciseId)?.name).join(", ")}
-            onClick={() => start(t.title, t.exercises)}
-            chevron
-          />
-        ))}
-      </ListSection>
-    </>
-  );
-}
-
-export function WorkoutLogger() {
-  const { workout, discard } = useActiveWorkout();
+export function WorkoutLogger({ exercises, history, routines, unit }: { exercises: Exercise[]; history: Workout[]; routines: Routine[]; unit: Unit }) {
+  const { workout, loaded, discard, addExercise, rename } = useActiveWorkout();
   const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [finishing, setFinishing] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, startSaving] = useTransition();
   const elapsed = useElapsed(workout?.startedAt);
   const rest = useElapsed(workout?.lastCompletedAt);
+  const exerciseMap = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
 
-  if (!workout) return <EmptyState />;
+  if (!loaded) return <PageHeader title="Workout" />;
+  if (!workout) return <EmptyState routines={routines} history={history} exercises={exerciseMap} />;
 
-  const done = workout.exercises.flatMap((e) => e.sets).filter((s) => s.completed).length;
-  const total = workout.exercises.flatMap((e) => e.sets).length;
+  const allSets = workout.exercises.flatMap((e) => e.sets);
+  const done = allSets.filter((s) => s.completed).length;
+
+  function finish() {
+    if (!workout) return;
+    setError(null);
+    startSaving(async () => {
+      const res = await saveWorkout({
+        title: workout.title,
+        startedAt: workout.startedAt,
+        exercises: workout.exercises.map((e) => ({ exerciseId: e.exerciseId, sets: e.sets })),
+      });
+      if (res.error || !res.id) {
+        setError(res.error ?? "Couldn't save your workout.");
+        return;
+      }
+      discard();
+      setFinishing(false);
+      router.push(`/history/${res.id}`);
+    });
+  }
 
   return (
     <>
@@ -330,9 +370,19 @@ export function WorkoutLogger() {
               <Timer className="size-4 text-accent" aria-hidden /> {formatDuration(elapsed)}
             </span>
             <span>
-              {done} of {total} sets done
+              {done} of {allSets.length} sets done
             </span>
             {workout.lastCompletedAt && <span className="tabular">Rest {formatDuration(rest)}</span>}
+            <button
+              type="button"
+              onClick={() => {
+                setDraftTitle(workout.title);
+                setRenaming(true);
+              }}
+              className="inline-flex min-h-11 items-center gap-1 text-accent"
+            >
+              <Pencil className="size-3.5" aria-hidden /> Rename
+            </button>
           </span>
         }
         actions={
@@ -344,7 +394,7 @@ export function WorkoutLogger() {
 
       {workout.exercises.map((entry) => {
         const ex = exerciseMap.get(entry.exerciseId);
-        return ex ? <ExerciseCard key={entry.id} entry={entry} exercise={ex} /> : null;
+        return ex ? <ExerciseCard key={entry.id} entry={entry} exercise={ex} history={history} unit={unit} /> : null;
       })}
 
       {!workout.exercises.length && (
@@ -354,11 +404,55 @@ export function WorkoutLogger() {
       <Button variant="tinted" size="large" className="mb-3 w-full" onClick={() => setAdding(true)}>
         <Plus className="size-5" strokeWidth={2.75} aria-hidden /> Add exercise
       </Button>
-      <Button variant="plain" className="w-full !text-red-text" onClick={() => discard()}>
+      <Button variant="plain" className="w-full !text-red-text" onClick={() => setConfirmDiscard(true)}>
         Discard workout
       </Button>
 
-      <AddExerciseSheet open={adding} onClose={() => setAdding(false)} />
+      <ExercisePicker open={adding} onClose={() => setAdding(false)} onPick={(e) => addExercise(e.id)} exercises={exercises} />
+
+      <Sheet
+        open={renaming}
+        onClose={() => setRenaming(false)}
+        title="Workout name"
+        footer={
+          <Button
+            className="w-full"
+            onClick={() => {
+              rename(draftTitle.trim().slice(0, 80) || "Workout");
+              setRenaming(false);
+            }}
+          >
+            Save
+          </Button>
+        }
+      >
+        <TextField label="Name" value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} maxLength={80} />
+      </Sheet>
+
+      <Sheet
+        open={confirmDiscard}
+        onClose={() => setConfirmDiscard(false)}
+        title="Discard this workout?"
+        footer={
+          <div className="flex gap-2">
+            <Button variant="gray" className="flex-1" onClick={() => setConfirmDiscard(false)}>
+              Keep going
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1"
+              onClick={() => {
+                discard();
+                setConfirmDiscard(false);
+              }}
+            >
+              Discard
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-body">The sets you logged in this session won&apos;t be saved.</p>
+      </Sheet>
 
       <Sheet
         open={finishing}
@@ -366,26 +460,25 @@ export function WorkoutLogger() {
         title="Finish workout?"
         footer={
           <div className="flex gap-2">
-            <Button variant="gray" className="flex-1" onClick={() => setFinishing(false)}>
+            <Button variant="gray" className="flex-1" onClick={() => setFinishing(false)} disabled={saving}>
               Keep going
             </Button>
-            <Button
-              className="flex-1"
-              onClick={() => {
-                discard();
-                setFinishing(false);
-                router.push("/history");
-              }}
-            >
-              Finish
+            <Button className="flex-1" onClick={finish} disabled={saving || done === 0} aria-busy={saving}>
+              {saving ? "Saving…" : "Save workout"}
             </Button>
           </div>
         }
       >
         <p className="text-body">
-          {done} sets completed in {formatDuration(elapsed)}.
+          {done} {done === 1 ? "set" : "sets"} completed in {formatDuration(elapsed)}.
         </p>
-        <p className="mt-2 text-subhead text-label-2">This preview doesn&apos;t save workouts yet. Saving to your history arrives with accounts and logging (stages 2 and 3).</p>
+        {done === 0 && <p className="mt-2 text-subhead text-label-2">Tap ✓ on at least one set to save this workout.</p>}
+        {done > 0 && done < allSets.length && <p className="mt-2 text-subhead text-label-2">Sets you didn&apos;t tick won&apos;t be saved.</p>}
+        {error && (
+          <p role="alert" className="mt-3 rounded-xl bg-red/15 px-3 py-2 text-subhead text-red-text">
+            {error}
+          </p>
+        )}
       </Sheet>
     </>
   );

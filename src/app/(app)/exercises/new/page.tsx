@@ -1,5 +1,6 @@
-import { NewExerciseForm } from "@/components/new-exercise-form";
+import { ExerciseForm } from "@/components/exercise-form";
 import { PageHeader } from "@/components/ui/interactive";
+import { createExercise } from "../actions";
 
 export const metadata = { title: "New exercise" };
 
@@ -8,7 +9,7 @@ export default function NewExercisePage() {
     <>
       <PageHeader title="New exercise" back={{ href: "/exercises", label: "Exercises" }} />
       <div className="max-w-xl">
-        <NewExerciseForm />
+        <ExerciseForm action={createExercise} />
       </div>
     </>
   );

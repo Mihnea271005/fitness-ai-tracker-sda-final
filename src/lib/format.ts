@@ -1,14 +1,20 @@
 import type { Exercise, ExerciseKind, Unit, Workout, WorkoutSet } from "./types";
 
-// Fixed locale + UTC so server and client render identical strings (no hydration mismatch).
+// Dates are formatted in the viewer's time zone (passed in explicitly, read from the
+// `tz` cookie on the server) with a fixed locale, so server and client agree.
 const LOCALE = "en-GB";
-const TZ = "UTC";
 
 export const KG_PER_LB = 0.45359237;
 
 export function toDisplayWeight(kg: number, unit: Unit): number {
   const v = unit === "kg" ? kg : kg / KG_PER_LB;
   return Math.round(v * 10) / 10;
+}
+
+/** User-entered weight in their unit → kg for storage (2 decimals, like the DB column). */
+export function fromDisplayWeight(value: number, unit: Unit): number {
+  const kg = unit === "kg" ? value : value * KG_PER_LB;
+  return Math.round(kg * 100) / 100;
 }
 
 export function formatWeight(kg: number, unit: Unit = "kg"): string {
@@ -55,16 +61,30 @@ export function formatPace(durationS: number, distanceM: number): string {
   return `${m}:${String(s).padStart(2, "0")} /km`;
 }
 
-export function formatDate(iso: string, opts: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short" }): string {
-  return new Intl.DateTimeFormat(LOCALE, { ...opts, timeZone: TZ }).format(new Date(iso));
+export function formatDate(
+  iso: string,
+  tz = "UTC",
+  opts: Intl.DateTimeFormatOptions = { weekday: "short", day: "numeric", month: "short" },
+): string {
+  return new Intl.DateTimeFormat(LOCALE, { ...opts, timeZone: tz }).format(new Date(iso));
 }
 
-export function formatTime(iso: string): string {
-  return new Intl.DateTimeFormat(LOCALE, { hour: "2-digit", minute: "2-digit", timeZone: TZ }).format(new Date(iso));
+export function formatTime(iso: string, tz = "UTC"): string {
+  return new Intl.DateTimeFormat(LOCALE, { hour: "2-digit", minute: "2-digit", timeZone: tz }).format(new Date(iso));
 }
 
-export function formatMonth(iso: string): string {
-  return new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric", timeZone: TZ }).format(new Date(iso));
+export function formatMonth(iso: string, tz = "UTC"): string {
+  return new Intl.DateTimeFormat(LOCALE, { month: "long", year: "numeric", timeZone: tz }).format(new Date(iso));
+}
+
+/** A calendar date ("2026-11-14") formatted without any time-zone shift. */
+export function formatDay(ymd: string, opts: Intl.DateTimeFormatOptions = { day: "numeric", month: "short" }): string {
+  return new Intl.DateTimeFormat(LOCALE, { ...opts, timeZone: "UTC" }).format(new Date(`${ymd}T12:00:00Z`));
+}
+
+/** The local calendar date ("YYYY-MM-DD") of an instant in a time zone. */
+export function localYmd(iso: string | Date, tz = "UTC"): string {
+  return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: tz }).format(new Date(iso));
 }
 
 export const KIND_LABEL: Record<ExerciseKind, string> = {
@@ -75,7 +95,7 @@ export const KIND_LABEL: Record<ExerciseKind, string> = {
 };
 
 /** One-line human summary of a set, by exercise kind. */
-export function formatSet(set: WorkoutSet, kind: ExerciseKind, unit: Unit = "kg"): string {
+export function formatSet(set: Pick<WorkoutSet, "weightKg" | "reps" | "durationS" | "distanceM">, kind: ExerciseKind, unit: Unit = "kg"): string {
   switch (kind) {
     case "strength":
       return `${formatWeight(set.weightKg ?? 0, unit)} × ${set.reps ?? 0}`;
@@ -88,7 +108,7 @@ export function formatSet(set: WorkoutSet, kind: ExerciseKind, unit: Unit = "kg"
       if (set.distanceM) parts.push(formatDistance(set.distanceM));
       if (set.durationS) parts.push(formatDuration(set.durationS));
       if (set.distanceM && set.durationS) parts.push(formatPace(set.durationS, set.distanceM));
-      return parts.join(" · ");
+      return parts.join(" · ") || "–";
     }
   }
 }

@@ -1,36 +1,37 @@
-import { estimatedOneRepMax, workoutDurationS, workoutVolumeKg } from "./format";
+import { estimatedOneRepMax, localYmd, workoutDurationS, workoutVolumeKg } from "./format";
 import type { Exercise, Workout, WorkoutSet } from "./types";
 
 const DAY = 86_400_000;
 
-function mondayOf(iso: string): number {
-  const d = new Date(iso);
-  const day = (d.getUTCDay() + 6) % 7; // 0 = Monday
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - day * DAY;
+/** Monday ("YYYY-MM-DD") of the local week containing `iso`, in time zone `tz`. */
+export function mondayOf(iso: string | Date, tz: string): string {
+  const [y, m, d] = localYmd(iso, tz).split("-").map(Number);
+  const utc = Date.UTC(y, m - 1, d);
+  const dow = (new Date(utc).getUTCDay() + 6) % 7; // 0 = Monday
+  return new Date(utc - dow * DAY).toISOString().slice(0, 10);
 }
 
 export interface WeekSummary {
-  weekStart: string; // ISO date of Monday
+  weekStart: string; // Monday, YYYY-MM-DD
   workouts: number;
   volumeKg: number;
   durationS: number;
 }
 
-/** Weekly totals for the `count` weeks ending with the week containing `todayIso`, oldest first. */
-export function weeklySummaries(workouts: Workout[], exercises: Map<string, Exercise>, todayIso: string, count = 12): WeekSummary[] {
-  const thisMonday = mondayOf(todayIso);
+/** Weekly totals for the `count` weeks ending with the current week, oldest first. */
+export function weeklySummaries(workouts: Workout[], exercises: Map<string, Exercise>, now: Date, tz: string, count = 12): WeekSummary[] {
+  const thisMonday = Date.parse(`${mondayOf(now, tz)}T00:00:00Z`);
   const weeks: WeekSummary[] = [];
   for (let i = count - 1; i >= 0; i--) {
-    const start = thisMonday - i * 7 * DAY;
-    weeks.push({ weekStart: new Date(start).toISOString(), workouts: 0, volumeKg: 0, durationS: 0 });
+    weeks.push({ weekStart: new Date(thisMonday - i * 7 * DAY).toISOString().slice(0, 10), workouts: 0, volumeKg: 0, durationS: 0 });
   }
+  const index = new Map(weeks.map((w, i) => [w.weekStart, i]));
   for (const w of workouts) {
-    const m = mondayOf(w.startedAt);
-    const idx = weeks.findIndex((x) => new Date(x.weekStart).getTime() === m);
-    if (idx === -1) continue;
-    weeks[idx].workouts += 1;
-    weeks[idx].volumeKg += workoutVolumeKg(w, exercises);
-    weeks[idx].durationS += workoutDurationS(w);
+    const i = index.get(mondayOf(w.startedAt, tz));
+    if (i === undefined) continue;
+    weeks[i].workouts += 1;
+    weeks[i].volumeKg += workoutVolumeKg(w, exercises);
+    weeks[i].durationS += workoutDurationS(w);
   }
   return weeks;
 }
@@ -78,8 +79,8 @@ export function exerciseHistory(workouts: Workout[], exercise: Exercise): Sessio
           value = Math.max(...working.map((s) => s.durationS ?? 0));
           break;
         case "cardio": {
-          const s = working[0];
-          value = s.distanceM ? (s.durationS ?? 0) / (s.distanceM / 1000) : 0;
+          const s = working.find((x) => x.distanceM && x.durationS);
+          value = s ? (s.durationS ?? 0) / ((s.distanceM ?? 1) / 1000) : 0;
           break;
         }
       }
@@ -125,6 +126,7 @@ export function personalRecords(workouts: Workout[], exercises: Map<string, Exer
             label = "Longest distance";
             break;
         }
+        if (score <= 0) continue;
         const prev = best.get(ex.id);
         if (!prev || score > prev.score) best.set(ex.id, { exercise: ex, label, set: s, date: w.startedAt, score });
       }
