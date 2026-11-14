@@ -19,7 +19,7 @@ export default function PlanPage() {
 }
 
 async function Plan() {
-  const { profile, exercises, workouts, coach, settings, today, plan } = await getCoach();
+  const { profile, exercises, workouts, coach, settings, today, plan, plans } = await getCoach();
 
   if (today.mode !== "weekly") {
     return (
@@ -57,7 +57,7 @@ async function Plan() {
         }
       />
 
-      {plan && today.status === "due" && <AiWorkoutCard plan={plan} unit={profile.unit} heading="Today" />}
+      {plan && today.status === "due" && <AiWorkoutCard plans={plans} unit={profile.unit} heading="Today" />}
 
       <ol className="mb-8 flex flex-col gap-2">
         {today.week.map((d) => {

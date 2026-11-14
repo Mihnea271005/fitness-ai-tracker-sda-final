@@ -83,6 +83,8 @@ export function suggestStart(ex: Exercise, est: Estimate | null, target: Target,
         reason = `You did ${formatWeight(last.weightKg, unit)} × ${last.reps} on all ${est.lastSets!.length} sets last time, so try ${formatWeight(roundLoad(kg, ex.weightIncrementKg, unit), unit)} × ${reps}.`;
       } else if (est.source === "profile") {
         reason = `Starting estimate for your profile: about ${formatWeight(est.value, unit)} max, so ${formatWeight(roundLoad(kg, ex.weightIncrementKg, unit), unit)} × ${reps} should feel comfortable.`;
+      } else if (last?.weightKg && last.reps && Math.abs(last.reps - reps) >= 2) {
+        reason = `Your plan uses ${reps} reps here, so ${formatWeight(roundLoad(kg, ex.weightIncrementKg, unit), unit)} × ${reps}: about the same effort as your ${formatWeight(last.weightKg, unit)} × ${last.reps} last time (estimated max ${formatWeight(est.value, unit)}).`;
       } else {
         reason = `Your recent sets put your max around ${formatWeight(est.value, unit)}, so ${formatWeight(roundLoad(kg, ex.weightIncrementKg, unit), unit)} × ${reps} leaves about 2 reps in reserve.`;
       }

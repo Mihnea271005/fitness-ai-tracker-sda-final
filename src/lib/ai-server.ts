@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { getCurrentUser } from "./auth";
 import { getExercises, getMeasurements, getTimeZone, getWorkouts } from "./data";
-import { coachProfile, trainingSettings } from "./ai/coach";
+import { coachProfile, locationsOf, trainingSettings } from "./ai/coach";
 import { generateWorkout, type GeneratedWorkout } from "./ai/generator";
 import { todayPlan, type TodayPlan } from "./ai/today";
 import { localYmd } from "./format";
@@ -14,8 +14,13 @@ export const getCoach = cache(async () => {
   const coach = coachProfile(profile, measurements, now);
   const settings = trainingSettings(profile);
   const today: TodayPlan = todayPlan(settings, workouts, now, tz);
-  const plan: GeneratedWorkout | null = today.dayType
-    ? generateWorkout(today.dayType, settings, coach, exercises, workouts, profile.unit, localYmd(now, tz))
-    : null;
-  return { profile, exercises, workouts, coach, settings, today, plan, tz, now };
+  // One version of today's workout per place they train (gym / home with weights / bodyweight).
+  const plans = today.dayType
+    ? locationsOf(profile).map((location) => ({
+        location,
+        plan: generateWorkout(today.dayType!, trainingSettings(profile, location), coach, exercises, workouts, profile.unit, localYmd(now, tz)),
+      }))
+    : [];
+  const plan: GeneratedWorkout | null = plans[0]?.plan ?? null;
+  return { profile, exercises, workouts, coach, settings, today, plan, plans, tz, now };
 });

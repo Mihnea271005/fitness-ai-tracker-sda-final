@@ -54,7 +54,10 @@ export async function saveTrainingProfile(_prev: OnboardingState, form: FormData
       session_minutes: minutes !== null ? Math.min(Math.max(minutes, 15), 180) : null,
       goal: pick(form.get("goal"), ["strength", "muscle", "general", "endurance", "fat_loss"] as const),
       focus,
-      equipment: pick(form.get("equipment"), ["gym", "dumbbells", "bodyweight"] as const),
+      locations: form
+        .getAll("locations")
+        .map(String)
+        .filter((l) => ["gym", "dumbbells", "bodyweight"].includes(l)),
       avoid_exercises: avoid,
       plan_mode: pick(form.get("planMode"), ["session", "weekly"] as const) ?? "session",
       onboarded_at: new Date().toISOString(),

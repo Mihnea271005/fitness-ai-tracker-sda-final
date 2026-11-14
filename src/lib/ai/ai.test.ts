@@ -88,16 +88,37 @@ describe("estimator", () => {
 
   it("moves towards real performance once sets are logged", () => {
     const prior = priorEstimate(bench, MAN)!;
-    // Much weaker than the profile predicts: 50 kg × 8 → ~65 kg e1RM
+    // Weaker than the profile predicts: 50 kg × 8 → ~65 kg e1RM
     const e = estimateExercise(bench, [workout(2, bench.id, [set(50, 8), set(50, 8)])], MAN, NOW)!;
-    expect(e.source).toBe("blend");
-    expect(e.value).toBeLessThan(prior);
     expect(e.value).toBeLessThan(prior * 0.85);
+  });
+
+  it("a weak profile guess never drags the estimate below what was actually lifted", () => {
+    // Reported case: 67.5 kg × 8 on three sets, profile predicts much lower.
+    const weak: CoachProfile = { sex: "female", age: 30, bodyweightKg: 60, experience: "new" };
+    const e = estimateExercise(bench, [workout(2, bench.id, [set(67.5, 8), set(67.5, 8), set(67.5, 8)])], weak, NOW)!;
+    expect(priorEstimate(bench, weak)!).toBeLessThan(60);
+    expect(e.value).toBeGreaterThan(85); // 67.5 × 8 (+1 rep in reserve) ≈ 87.8 kg
+    expect(e.source).toBe("history");
+  });
+
+  it("a strong profile guess still lifts estimates from light calibration sets", () => {
+    const e = estimateExercise(bench, [workout(2, bench.id, [set(50, 8)])], MAN, NOW)!; // ~65 kg from a light set
+    expect(e.value).toBeGreaterThan(66);
+    expect(e.source).toBe("blend");
   });
 
   it("after 3+ sessions it is driven by history", () => {
     const ws = [3, 6, 9].map((d) => workout(d, bench.id, [set(60, 8), set(60, 8)]));
     expect(estimateExercise(bench, ws, MAN, NOW)!.source).toBe("history");
+  });
+
+  it("keeps the user's own rep count when it's close to the goal's", () => {
+    const history = [workout(2, byslug("bench-press").id, [set(67.5, 8), set(67.5, 8), set(67.5, 8)])];
+    const w = generateWorkout("full_a", { ...SETTINGS, goal: "general" }, MAN, LIBRARY, history, "kg", "2026-11-14");
+    const b = w.exercises.find((p) => p.exercise.slug === "bench-press")!;
+    expect(b.target.reps).toBe(8); // general fitness says 10; 8 is within ±2, so keep it
+    expect(b.suggestion!.values.weightKg).toBe(70); // all sets hit → one step up from 67.5
   });
 
   it("'too easy' raises the estimate, 'too hard' lowers it", () => {

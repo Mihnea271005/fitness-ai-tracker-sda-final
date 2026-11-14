@@ -27,6 +27,7 @@ export default function HomePage() {
 
 async function Home() {
   const [profile, workouts, exercises, tz, { plan, today }] = await Promise.all([getCurrentUser(), getWorkouts(), getExerciseMap(), getTimeZone(), getCoach()]);
+  const { plans } = await getCoach();
   const now = new Date();
   const weeks = weeklySummaries(workouts, exercises, now, tz, 12);
   const thisWeek = weeks[weeks.length - 1];
@@ -54,7 +55,7 @@ async function Home() {
       ) : (
         plan && (
           <AiWorkoutCard
-            plan={plan}
+            plans={plans}
             unit={profile.unit}
             showWeekLink={today.mode === "weekly"}
             heading={

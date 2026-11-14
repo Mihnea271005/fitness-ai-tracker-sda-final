@@ -132,7 +132,8 @@ export interface Profile {
   sessionMinutes?: number;
   goal?: Goal;
   focus: FocusArea[];
-  equipment?: EquipmentAccess;
+  /** where they train; more than one allowed (e.g. gym and home) */
+  locations: EquipmentAccess[];
   avoidExercises: string[];
   planMode: PlanMode;
   onboarded: boolean;

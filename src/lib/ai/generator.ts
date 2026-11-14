@@ -159,6 +159,9 @@ export function generateWorkout(
     const c = CATALOG[chosen.slug!];
     const target = targetFor(settings.goal, chosen, c.compound, profile.experience, settings.sessionMinutes);
     const estimate = estimateExercise(chosen, workouts, profile);
+    // Continuity: if you've been doing a rep count close to the goal's (±2), keep it.
+    const lastReps = estimate?.lastSets?.[0]?.reps;
+    if (target.reps && lastReps && Math.abs(lastReps - target.reps) <= 2 && chosen.kind === "strength") target.reps = lastReps;
     const why =
       i === 0
         ? "Main lift of the day"

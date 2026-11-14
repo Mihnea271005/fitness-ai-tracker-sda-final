@@ -2,13 +2,18 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { SegmentedControl } from "./ui/interactive";
 import { CalendarDays, Clock, Play, Sparkles } from "lucide-react";
 import { ExerciseIcon } from "./exercise-icon";
 import { Button, ButtonLink } from "./ui/primitives";
 import { useActiveWorkout } from "./workout/workout-context";
 import { formatDuration, formatSet } from "@/lib/format";
 import type { GeneratedWorkout } from "@/lib/ai/generator";
-import type { Unit } from "@/lib/types";
+import type { EquipmentAccess, Unit } from "@/lib/types";
+
+const LOCATION_LABEL: Record<EquipmentAccess, string> = { gym: "Gym", dumbbells: "Home · weights", bodyweight: "Home · no kit" };
+const LOCATION_KEY = "ai-location";
 
 function targetText(p: GeneratedWorkout["exercises"][number], unit: Unit) {
   const t = p.target;
@@ -20,9 +25,42 @@ function targetText(p: GeneratedWorkout["exercises"][number], unit: Unit) {
 }
 
 /** Today's AI-built workout, with a one-tap start. */
-export function AiWorkoutCard({ plan, unit, heading, note, showWeekLink }: { plan: GeneratedWorkout; unit: Unit; heading: string; note?: string; showWeekLink?: boolean }) {
+export function AiWorkoutCard({
+  plans,
+  unit,
+  heading,
+  note,
+  showWeekLink,
+}: {
+  plans: { location: EquipmentAccess; plan: GeneratedWorkout }[];
+  unit: Unit;
+  heading: string;
+  note?: string;
+  showWeekLink?: boolean;
+}) {
   const { workout, start } = useActiveWorkout();
   const router = useRouter();
+  const [location, setLocation] = useState<EquipmentAccess>(plans[0].location);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(LOCATION_KEY) as EquipmentAccess | null;
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restore the last place this device trained at
+      if (saved && plans.some((p) => p.location === saved)) setLocation(saved);
+    } catch {
+      /* storage unavailable */
+    }
+  }, [plans]);
+
+  const plan = (plans.find((p) => p.location === location) ?? plans[0]).plan;
+  const choose = (l: EquipmentAccess) => {
+    setLocation(l);
+    try {
+      localStorage.setItem(LOCATION_KEY, l);
+    } catch {
+      /* ignore */
+    }
+  };
 
   function begin() {
     start(
@@ -61,6 +99,16 @@ export function AiWorkoutCard({ plan, unit, heading, note, showWeekLink }: { pla
           {note && <p className="mt-1 text-footnote text-label-2">{note}</p>}
         </div>
       </div>
+      {plans.length > 1 && (
+        <div className="px-4 pb-3">
+          <SegmentedControl<EquipmentAccess>
+            label="Where are you training today?"
+            value={location}
+            onChange={choose}
+            options={plans.map((p) => ({ value: p.location, label: LOCATION_LABEL[p.location] }))}
+          />
+        </div>
+      )}
       <ul className="divide-y divide-separator border-t border-separator">
         {plan.exercises.map((p) => (
           <li key={p.exercise.id} className="flex items-center gap-3 px-4 py-2.5">

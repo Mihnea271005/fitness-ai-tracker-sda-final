@@ -134,14 +134,16 @@ export function estimateExercise(ex: Exercise, workouts: Workout[], p: CoachProf
       num += w * s.value;
       den += w;
     }
-    if (prior !== undefined) {
-      num += opts.priorWeight * prior;
-      den += opts.priorWeight;
-    }
-    value = num / den;
+    const fromHistory = num / den;
+    // The profile guess only fills in for missing data: it may pull the estimate UP
+    // (light calibration sets understate a strong lifter) but never below what the
+    // person has actually demonstrated.
+    const lowerIsBetter = ex.kind === "cardio";
+    const priorIsHigher = prior !== undefined && (lowerIsBetter ? prior < fromHistory : prior > fromHistory);
+    value = priorIsHigher ? (num + opts.priorWeight * prior!) / (den + opts.priorWeight) : fromHistory;
     // The latest session is the best evidence of today's level: never estimate far below it.
     if (opts.latestFloor > 0) value = ex.kind === "cardio" ? Math.min(value, sessions[0].value * (2 - opts.latestFloor)) : Math.max(value, sessions[0].value * opts.latestFloor);
-    source = prior !== undefined && sessions.length < 3 ? "blend" : "history";
+    source = priorIsHigher && sessions.length < 3 ? "blend" : "history";
 
     // Time off: lose ~1% per week after two weeks away (capped at 15%).
     daysSinceLast = Math.floor((now.getTime() - latest) / DAY);

@@ -112,11 +112,12 @@ export function OnboardingForm({ profile, exercises, bodyweight, editing }: { pr
   const [days, setDays] = useState(String(profile.daysPerWeek ?? 3));
   const [minutes, setMinutes] = useState(String(profile.sessionMinutes ?? 60));
   const [focus, setFocus] = useState<FocusArea[]>(profile.focus ?? []);
-  const [equipment, setEquipment] = useState<EquipmentAccess | undefined>(profile.equipment);
+  const [locations, setLocations] = useState<EquipmentAccess[]>(profile.locations ?? []);
   const [planMode, setPlanMode] = useState<PlanMode>(profile.planMode);
   const [avoid, setAvoid] = useState<string[]>(profile.avoidExercises ?? []);
 
-  const avoidable = exercises.filter((e) => !e.archived && e.kind !== "cardio" && EQUIPMENT_NEEDS[equipment ?? "gym"].includes(e.equipment));
+  const best: EquipmentAccess = locations.includes("gym") || !locations.length ? "gym" : locations.includes("dumbbells") ? "dumbbells" : "bodyweight";
+  const avoidable = exercises.filter((e) => !e.archived && e.kind !== "cardio" && EQUIPMENT_NEEDS[best].includes(e.equipment));
   const steps = ["About you", "Your training", "Your plan"];
 
   return (
@@ -211,15 +212,16 @@ export function OnboardingForm({ profile, exercises, bodyweight, editing }: { pr
       </Step>
 
       <Step show={step === 2}>
-        <Choice<EquipmentAccess>
-          name="equipment"
+        <Chips<EquipmentAccess>
+          name="locations"
           label="Where do you train?"
-          value={equipment}
-          onChange={setEquipment}
+          hint="Pick all that apply. You can switch between them for each workout."
+          values={locations}
+          onChange={setLocations}
           options={[
-            { value: "gym", title: "Gym", detail: "Barbells, machines, cables" },
-            { value: "dumbbells", title: "Home with weights", detail: "Dumbbells or kettlebells" },
-            { value: "bodyweight", title: "Home, no equipment", detail: "Bodyweight only" },
+            { value: "gym", title: "Gym" },
+            { value: "dumbbells", title: "Home with weights" },
+            { value: "bodyweight", title: "Home, no equipment" },
           ]}
         />
         <Chips<FocusArea>

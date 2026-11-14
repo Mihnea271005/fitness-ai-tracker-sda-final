@@ -18,7 +18,7 @@ export const getCurrentUser = cache(async (): Promise<Profile> => {
 
   const { data: row } = await supabase
     .from("profiles")
-    .select("display_name, unit, weekly_goal, sex, birth_year, height_cm, experience, days_per_week, session_minutes, goal, focus, equipment, avoid_exercises, plan_mode, onboarded_at")
+    .select("display_name, unit, weekly_goal, sex, birth_year, height_cm, experience, days_per_week, session_minutes, goal, focus, locations, avoid_exercises, plan_mode, onboarded_at")
     .eq("id", claims.sub)
     .maybeSingle();
 
@@ -37,7 +37,7 @@ export const getCurrentUser = cache(async (): Promise<Profile> => {
     sessionMinutes: row?.session_minutes ?? undefined,
     goal: (row?.goal as Goal) ?? undefined,
     focus: (row?.focus as FocusArea[]) ?? [],
-    equipment: (row?.equipment as EquipmentAccess) ?? undefined,
+    locations: (row?.locations as EquipmentAccess[]) ?? [],
     avoidExercises: (row?.avoid_exercises as string[]) ?? [],
     planMode: (row?.plan_mode as PlanMode) ?? "session",
     onboarded: Boolean(row?.onboarded_at),

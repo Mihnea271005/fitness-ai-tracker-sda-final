@@ -16,11 +16,11 @@ export default function WorkoutPage() {
 }
 
 async function Logger() {
-  const [{ profile, exercises, workouts, coach, settings, plan, today }, routines] = await Promise.all([getCoach(), getRoutines()]);
+  const [{ profile, exercises, workouts, coach, settings, plan, plans, today }, routines] = await Promise.all([getCoach(), getRoutines()]);
   const aiCard =
     plan && profile.onboarded ? (
       <AiWorkoutCard
-        plan={plan}
+        plans={plans}
         unit={profile.unit}
         heading={today.mode === "weekly" ? (today.status === "due" ? "Today's plan" : "Next in your plan") : "Suggested next"}
         showWeekLink={today.mode === "weekly"}
