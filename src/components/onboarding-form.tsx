@@ -111,10 +111,10 @@ export function OnboardingForm({ profile, exercises, bodyweight, editing }: { pr
   const [goal, setGoal] = useState<Goal | undefined>(profile.goal);
   const [days, setDays] = useState(String(profile.daysPerWeek ?? 3));
   const [minutes, setMinutes] = useState(String(profile.sessionMinutes ?? 60));
-  const [focus, setFocus] = useState<FocusArea[]>(profile.focus);
+  const [focus, setFocus] = useState<FocusArea[]>(profile.focus ?? []);
   const [equipment, setEquipment] = useState<EquipmentAccess | undefined>(profile.equipment);
   const [planMode, setPlanMode] = useState<PlanMode>(profile.planMode);
-  const [avoid, setAvoid] = useState<string[]>(profile.avoidExercises);
+  const [avoid, setAvoid] = useState<string[]>(profile.avoidExercises ?? []);
 
   const avoidable = exercises.filter((e) => !e.archived && e.kind !== "cardio" && EQUIPMENT_NEEDS[equipment ?? "gym"].includes(e.equipment));
   const steps = ["About you", "Your training", "Your plan"];
