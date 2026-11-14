@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Dumbbell, Flame, Play, Timer, Trophy, Weight } from "lucide-react";
+import { Dumbbell, Flame, Play, Sparkles, Timer, Trophy, Weight } from "lucide-react";
 import { PageHeader } from "@/components/ui/interactive";
 import { ButtonLink, Card, ListSection, SectionTitle, StatTile } from "@/components/ui/primitives";
 import { GoalRing } from "@/components/goal-ring";
 import { WorkoutRow } from "@/components/workout-row";
 import { ExerciseIcon } from "@/components/exercise-icon";
 import { SampleDataButton } from "@/components/sample-data-button";
+import { AiWorkoutCard } from "@/components/ai-workout-card";
+import { getCoach } from "@/lib/ai-server";
+import { dayLabel } from "@/lib/ai/today";
 import { getCurrentUser } from "@/lib/auth";
 import { getExerciseMap, getTimeZone, getWorkouts } from "@/lib/data";
 import { formatCompact, formatDate, formatLongDuration, formatSet, toDisplayWeight } from "@/lib/format";
@@ -23,7 +26,7 @@ export default function HomePage() {
 }
 
 async function Home() {
-  const [profile, workouts, exercises, tz] = await Promise.all([getCurrentUser(), getWorkouts(), getExerciseMap(), getTimeZone()]);
+  const [profile, workouts, exercises, tz, { plan, today }] = await Promise.all([getCurrentUser(), getWorkouts(), getExerciseMap(), getTimeZone(), getCoach()]);
   const now = new Date();
   const weeks = weeklySummaries(workouts, exercises, now, tz, 12);
   const thisWeek = weeks[weeks.length - 1];
@@ -36,6 +39,43 @@ async function Home() {
   return (
     <>
       <PageHeader title={`Hi, ${profile.displayName}`} subtitle={formatDate(now.toISOString(), tz, { weekday: "long", day: "numeric", month: "long" })} />
+
+      {!profile.onboarded ? (
+        <Card className="mb-6 flex flex-col gap-3 p-5 sm:flex-row sm:items-center">
+          <span className="inline-flex size-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-indigo to-accent text-white">
+            <Sparkles className="size-6" aria-hidden />
+          </span>
+          <div className="flex-1">
+            <h2 className="text-headline font-semibold">Set up your AI coach</h2>
+            <p className="text-subhead text-label-2">Answer a few questions and get workouts built for you, with suggested weights from your first session.</p>
+          </div>
+          <ButtonLink href="/onboarding">Get started</ButtonLink>
+        </Card>
+      ) : (
+        plan && (
+          <AiWorkoutCard
+            plan={plan}
+            unit={profile.unit}
+            showWeekLink={today.mode === "weekly"}
+            heading={
+              today.mode === "weekly"
+                ? today.status === "due"
+                  ? "Today's workout"
+                  : today.status === "done"
+                    ? "Done for today · next up"
+                    : "Rest day · next up"
+                : today.trainedToday
+                  ? "You trained today · next time"
+                  : "Your next workout"
+            }
+            note={
+              today.mode === "weekly" && today.status !== "due" && today.next
+                ? `Planned for ${formatDate(`${today.next.date}T12:00:00Z`, "UTC", { weekday: "long" })} (${dayLabel(today.next.dayType)}). You can also do it today.`
+                : undefined
+            }
+          />
+        )
+      )}
 
       <Card className="mb-6 flex flex-col items-center gap-5 p-5 sm:flex-row sm:items-center">
         <GoalRing done={thisWeek.workouts} goal={profile.weeklyGoal} />

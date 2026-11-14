@@ -49,3 +49,7 @@ legacy/fitness_ai.db
 legacy/models/*.joblib
 legacy/mobile/node_modules/
 legacy/mobile/.expo/
+
+# ML training data (downloaded, not committed)
+ml/data/
+ml/.venv/

@@ -67,10 +67,12 @@ interface SetRow {
   distance_m: number | null;
   rpe: Num;
   completed: boolean;
+  feel: -1 | 0 | 1 | null;
 }
 interface WorkoutRow {
   id: string;
   title: string;
+  plan_day: string | null;
   started_at: string;
   ended_at: string;
   notes: string | null;
@@ -78,12 +80,13 @@ interface WorkoutRow {
 }
 
 const WORKOUT_COLS =
-  "id, title, started_at, ended_at, notes, workout_exercises(id, exercise_id, position, notes, sets(id, position, type, weight_kg, reps, duration_s, distance_m, rpe, completed))";
+  "id, title, plan_day, started_at, ended_at, notes, workout_exercises(id, exercise_id, position, notes, sets(id, position, type, weight_kg, reps, duration_s, distance_m, rpe, completed, feel))";
 
 function toWorkout(r: WorkoutRow): Workout {
   return {
     id: r.id,
     title: r.title,
+    planDay: r.plan_day ?? undefined,
     startedAt: r.started_at,
     endedAt: r.ended_at,
     notes: r.notes ?? undefined,
@@ -104,6 +107,7 @@ function toWorkout(r: WorkoutRow): Workout {
             durationS: s.duration_s ?? undefined,
             distanceM: s.distance_m ?? undefined,
             rpe: n(s.rpe),
+            feel: s.feel ?? undefined,
             completed: s.completed,
           })),
       })),

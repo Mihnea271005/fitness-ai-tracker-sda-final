@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Download, LogOut, Moon, Ruler, Target, Timer, Trash2 } from "lucide-react";
+import { Download, LogOut, Moon, Ruler, Sparkles, Target, Timer, Trash2 } from "lucide-react";
 import { Button, ListRow, ListSection, TextField } from "./ui/primitives";
 import { SegmentedControl, Sheet, Toggle } from "./ui/interactive";
 import { deleteAccount, updateProfile, type ProfilePatch } from "@/app/(app)/settings/actions";
@@ -60,6 +60,19 @@ export function SettingsView({ profile }: { profile: Profile }) {
             setDraftName(name);
             setEditingName(true);
           }}
+        />
+      </ListSection>
+
+      <ListSection header="AI coach" footer="Your answers shape the workouts and starting weights the AI suggests.">
+        <ListRow
+          leading={
+            <RowIcon bg="bg-linear-to-br from-indigo to-accent">
+              <Sparkles className="size-4" aria-hidden />
+            </RowIcon>
+          }
+          title="Training profile"
+          subtitle={profile.onboarded ? "Goal, schedule, equipment, focus" : "Not set up yet"}
+          href="/onboarding"
         />
       </ListSection>
 
@@ -129,6 +142,18 @@ export function SettingsView({ profile }: { profile: Profile }) {
           title="Rest timer after each set"
           trailing={<Toggle checked={restTimer} onChange={setRestTimer} label="Rest timer after each set" />}
         />
+      </ListSection>
+
+      <ListSection
+        header="About the AI"
+        footer={
+          <>
+            Starting weights come from a model trained on data from the OpenPowerlifting project (openpowerlifting.org; data at
+            gitlab.com/openpowerlifting/opl-data), then adapt to your own logged sets. Suggestions are a starting point, not medical advice.
+          </>
+        }
+      >
+        <ListRow title="How suggestions work" subtitle="Profile estimate → your sets take over after 2–3 sessions" />
       </ListSection>
 
       <ListSection header="Appearance" footer="The app follows your device's light or dark setting.">

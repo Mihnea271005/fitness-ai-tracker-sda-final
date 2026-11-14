@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { Check, Ellipsis, Pencil, Plus, Sparkles, Timer, Trash2 } from "lucide-react";
 import { ExerciseIcon } from "../exercise-icon";
 import { ExercisePicker } from "../exercise-picker";
@@ -11,8 +11,26 @@ import { PageHeader, Sheet } from "../ui/interactive";
 import { useActiveWorkout, useElapsed, type DraftExercise, type DraftSet, type StartExercise } from "./workout-context";
 import { saveWorkout } from "@/app/(app)/workout/actions";
 import { KIND_LABEL, formatDuration, formatSet, fromDisplayWeight, toDisplayWeight } from "@/lib/format";
-import { lastSessionSets, suggestFirstSet } from "@/lib/suggest";
+import { CATALOG } from "@/lib/ai/catalog";
+import { estimateExercise, type CoachProfile } from "@/lib/ai/estimator";
+import type { TrainingSettings } from "@/lib/ai/generator";
+import { adjustNext, suggestStart, targetFor, type Suggestion, type Target } from "@/lib/ai/prescribe";
 import type { Exercise, ExerciseKind, Routine, Unit, Workout, WorkoutSet } from "@/lib/types";
+
+/** Working sets from the most recent session with this exercise (for the "Previous" column). */
+function lastSessionSets(workouts: Workout[], exerciseId: string): WorkoutSet[] {
+  for (const w of workouts) {
+    const we = w.exercises.find((e) => e.exerciseId === exerciseId);
+    const working = we?.sets.filter((s) => s.completed && s.type !== "warmup");
+    if (working?.length) return working;
+  }
+  return [];
+}
+
+export interface CoachContext {
+  profile: CoachProfile;
+  settings: TrainingSettings;
+}
 
 /* ------------------------------------------------------------------ field config per kind */
 
@@ -93,6 +111,7 @@ function SetRow({
   placeholder,
   onChange,
   onRemove,
+  showFeel,
 }: {
   number: number;
   set: DraftSet;
@@ -102,6 +121,7 @@ function SetRow({
   placeholder?: Partial<WorkoutSet>;
   onChange: (patch: Partial<DraftSet>) => void;
   onRemove: () => void;
+  showFeel?: boolean;
 }) {
   const fields = fieldsFor(kind, unit);
 
@@ -114,6 +134,7 @@ function SetRow({
   }
 
   return (
+    <>
     <div className={cn(GRID, "group -mx-2 rounded-xl px-2 py-1 transition-colors", set.completed && "bg-green/15")}>
       <button
         type="button"
@@ -155,18 +176,58 @@ function SetRow({
         <Check className="size-5" strokeWidth={3} aria-hidden />
       </button>
     </div>
+    {showFeel && set.completed && kind !== "cardio" && (
+      <div role="group" aria-label={`How did set ${number} feel?`} className="mb-1 flex items-center gap-1.5 pl-10 sm:pl-12">
+        <span className="mr-1 text-footnote text-label-2">Felt</span>
+        {([
+          [1, "Too easy"],
+          [0, "Just right"],
+          [-1, "Too hard"],
+        ] as const).map(([v, label]) => (
+          <button
+            key={v}
+            type="button"
+            aria-pressed={set.feel === v}
+            onClick={() => onChange({ feel: set.feel === v ? undefined : v })}
+            className={cn(
+              "min-h-9 rounded-full px-3 text-footnote font-semibold transition-colors",
+              set.feel === v ? "bg-accent text-white" : "bg-fill-3 text-label-2 hover:bg-fill-2",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    )}
+    </>
   );
 }
 
 /* ------------------------------------------------------------------ exercise card */
 
-function ExerciseCard({ entry, exercise, history, unit }: { entry: DraftExercise; exercise: Exercise; history: Workout[]; unit: Unit }) {
+function ExerciseCard({ entry, exercise, history, unit, coach }: { entry: DraftExercise; exercise: Exercise; history: Workout[]; unit: Unit; coach: CoachContext }) {
   const { addSet, updateSet, removeSet, removeExercise } = useActiveWorkout();
   const [menu, setMenu] = useState(false);
   const last = useMemo(() => lastSessionSets(history, exercise.id), [history, exercise.id]);
-  const suggestion = useMemo(() => suggestFirstSet(exercise, last, unit), [exercise, last, unit]);
+  const target: Target = useMemo(() => {
+    const t = targetFor(coach.settings.goal, exercise, CATALOG[exercise.slug ?? ""]?.compound ?? true, coach.profile.experience, coach.settings.sessionMinutes);
+    return { ...t, reps: entry.targetReps ?? t.reps, seconds: entry.targetSeconds ?? t.seconds, minutes: entry.targetMinutes ?? t.minutes };
+  }, [coach, exercise, entry.targetReps, entry.targetSeconds, entry.targetMinutes]);
+  const suggestion = useMemo(
+    () => suggestStart(exercise, estimateExercise(exercise, history, coach.profile), target, unit),
+    [exercise, history, coach.profile, target, unit],
+  );
   const fields = fieldsFor(exercise.kind, unit);
   const firstPlaceholder = suggestion?.values ?? (entry.targetReps ? { reps: entry.targetReps } : undefined);
+  // Live coaching: after a set is ticked, the next one adapts to it.
+  const lastDoneIndex = entry.sets.findLastIndex((s) => s.completed);
+  const live: Suggestion | null = lastDoneIndex >= 0 && lastDoneIndex < entry.sets.length - 1 ? adjustNext(exercise, entry.sets[lastDoneIndex], target, unit) : null;
+  const placeholderFor = (i: number): Partial<WorkoutSet> | undefined => {
+    if (i === 0) return firstPlaceholder;
+    const prev = entry.sets[i - 1];
+    if (prev.completed) return { ...firstPlaceholder, ...(adjustNext(exercise, prev, target, unit)?.values ?? enteredValues(prev)) };
+    return { ...firstPlaceholder, ...enteredValues(prev) };
+  };
 
   return (
     <section aria-label={exercise.name} className="mb-4 rounded-[var(--radius-card)] bg-surface p-3 sm:p-4">
@@ -205,12 +266,13 @@ function ExerciseCard({ entry, exercise, history, unit }: { entry: DraftExercise
         </div>
       </header>
 
-      {suggestion && (
-        <div className="mb-3 flex gap-2 rounded-xl bg-accent/10 px-3 py-2.5 text-subhead">
+      {(live ?? suggestion) && (
+        <div className="mb-3 flex gap-2 rounded-xl bg-accent/10 px-3 py-2.5 text-subhead" aria-live="polite">
           <Sparkles className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
           <p>
-            <span className="font-semibold text-accent">Suggested: </span>
-            {suggestion.reason}
+            <span className="font-semibold text-accent">{live ? `Set ${lastDoneIndex + 2}: ` : "Suggested: "}</span>
+            {(live ?? suggestion)!.reason}
+            {!live && entry.why && <span className="block text-footnote text-label-2">{entry.why}</span>}
           </p>
         </div>
       )}
@@ -235,9 +297,10 @@ function ExerciseCard({ entry, exercise, history, unit }: { entry: DraftExercise
             kind={exercise.kind}
             unit={unit}
             previous={last[i]}
-            placeholder={i === 0 ? firstPlaceholder : { ...firstPlaceholder, ...enteredValues(entry.sets[i - 1]) }}
+            placeholder={placeholderFor(i)}
             onChange={(patch) => updateSet(entry.id, s.id, patch)}
             onRemove={() => removeSet(entry.id, s.id)}
+            showFeel={i === lastDoneIndex}
           />
         ))}
       </div>
@@ -251,7 +314,7 @@ function ExerciseCard({ entry, exercise, history, unit }: { entry: DraftExercise
 
 /* ------------------------------------------------------------------ empty state */
 
-function EmptyState({ routines, history, exercises }: { routines: Routine[]; history: Workout[]; exercises: Map<string, Exercise> }) {
+function EmptyState({ routines, history, exercises, aiCard }: { routines: Routine[]; history: Workout[]; exercises: Map<string, Exercise>; aiCard?: ReactNode }) {
   const { start } = useActiveWorkout();
   const names = (ids: string[]) => ids.map((id) => exercises.get(id)?.name).filter(Boolean).join(", ");
 
@@ -267,7 +330,8 @@ function EmptyState({ routines, history, exercises }: { routines: Routine[]; his
   return (
     <>
       <PageHeader title="Workout" subtitle="Start from scratch, a routine, or a recent session." />
-      <Button size="large" className="mb-8 w-full" onClick={() => start("Workout")}>
+      {aiCard}
+      <Button size="large" variant={aiCard ? "gray" : "filled"} className="mb-8 w-full" onClick={() => start("Workout")}>
         <Plus className="size-5" strokeWidth={2.75} aria-hidden /> Start empty workout
       </Button>
 
@@ -321,7 +385,21 @@ function EmptyState({ routines, history, exercises }: { routines: Routine[]; his
 
 /* ------------------------------------------------------------------ page body */
 
-export function WorkoutLogger({ exercises, history, routines, unit }: { exercises: Exercise[]; history: Workout[]; routines: Routine[]; unit: Unit }) {
+export function WorkoutLogger({
+  exercises,
+  history,
+  routines,
+  unit,
+  coach,
+  aiCard,
+}: {
+  exercises: Exercise[];
+  history: Workout[];
+  routines: Routine[];
+  unit: Unit;
+  coach: CoachContext;
+  aiCard?: ReactNode;
+}) {
   const { workout, loaded, discard, addExercise, rename } = useActiveWorkout();
   const router = useRouter();
   const [adding, setAdding] = useState(false);
@@ -336,7 +414,7 @@ export function WorkoutLogger({ exercises, history, routines, unit }: { exercise
   const exerciseMap = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
 
   if (!loaded) return <PageHeader title="Workout" />;
-  if (!workout) return <EmptyState routines={routines} history={history} exercises={exerciseMap} />;
+  if (!workout) return <EmptyState routines={routines} history={history} exercises={exerciseMap} aiCard={aiCard} />;
 
   const allSets = workout.exercises.flatMap((e) => e.sets);
   const done = allSets.filter((s) => s.completed).length;
@@ -347,6 +425,7 @@ export function WorkoutLogger({ exercises, history, routines, unit }: { exercise
     startSaving(async () => {
       const res = await saveWorkout({
         title: workout.title,
+        planDay: workout.planDay,
         startedAt: workout.startedAt,
         exercises: workout.exercises.map((e) => ({ exerciseId: e.exerciseId, sets: e.sets })),
       });
@@ -394,7 +473,7 @@ export function WorkoutLogger({ exercises, history, routines, unit }: { exercise
 
       {workout.exercises.map((entry) => {
         const ex = exerciseMap.get(entry.exerciseId);
-        return ex ? <ExerciseCard key={entry.id} entry={entry} exercise={ex} history={history} unit={unit} /> : null;
+        return ex ? <ExerciseCard key={entry.id} entry={entry} exercise={ex} history={history} unit={unit} coach={coach} /> : null;
       })}
 
       {!workout.exercises.length && (

@@ -68,10 +68,10 @@ export async function signUp(_prev: AuthState, form: FormData): Promise<AuthStat
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { display_name: name }, emailRedirectTo: `${await siteOrigin()}/auth/callback?next=/home` },
+    options: { data: { display_name: name }, emailRedirectTo: `${await siteOrigin()}/auth/callback?next=/onboarding` },
   });
   if (error) return { error: friendly(error.message), values };
-  if (data.session) redirect("/home"); // email confirmation is turned off in Supabase
+  if (data.session) redirect("/onboarding"); // email confirmation is turned off in Supabase
   return { message: `We sent a confirmation link to ${email}. Open it on this device to finish signing up.` };
 }
 

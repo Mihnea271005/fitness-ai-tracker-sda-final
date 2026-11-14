@@ -58,6 +58,8 @@ export interface WorkoutSet {
   durationS?: number; // cardio, timed
   distanceM?: number; // cardio
   rpe?: number;
+  /** how the set felt: -1 too hard, 0 just right, 1 too easy */
+  feel?: -1 | 0 | 1;
   completed: boolean;
 }
 
@@ -71,6 +73,8 @@ export interface WorkoutExercise {
 export interface Workout {
   id: string;
   title: string;
+  /** split day of a generated workout, e.g. "upper" */
+  planDay?: string;
   startedAt: string; // ISO
   endedAt: string; // ISO
   notes?: string;
@@ -106,10 +110,30 @@ export interface BodyMeasurement {
 
 export type Unit = "kg" | "lb";
 
+export type Sex = "male" | "female" | "unspecified";
+export type Experience = "new" | "under_1" | "1_to_3" | "over_3";
+export type Goal = "strength" | "muscle" | "general" | "endurance" | "fat_loss";
+export type EquipmentAccess = "gym" | "dumbbells" | "bodyweight";
+export type FocusArea = "chest" | "back" | "shoulders" | "arms" | "legs" | "glutes" | "core";
+export type PlanMode = "session" | "weekly";
+
 export interface Profile {
   id: string;
   displayName: string;
   email: string;
   unit: Unit;
   weeklyGoal: number;
+  // Training profile (onboarding questionnaire) — all optional
+  sex: Sex;
+  birthYear?: number;
+  heightCm?: number;
+  experience?: Experience;
+  daysPerWeek?: number;
+  sessionMinutes?: number;
+  goal?: Goal;
+  focus: FocusArea[];
+  equipment?: EquipmentAccess;
+  avoidExercises: string[];
+  planMode: PlanMode;
+  onboarded: boolean;
 }

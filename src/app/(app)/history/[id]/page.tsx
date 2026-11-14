@@ -9,9 +9,14 @@ import { ConfirmAction } from "@/components/confirm-action";
 import { deleteWorkout } from "@/app/(app)/workout/actions";
 import { routineFromWorkout } from "@/app/(app)/routines/actions";
 import { getCurrentUser } from "@/lib/auth";
-import { getExerciseMap, getTimeZone, getWorkout } from "@/lib/data";
+import { getExerciseMap, getMeasurements, getTimeZone, getWorkout, getWorkouts } from "@/lib/data";
+import { coachProfile } from "@/lib/ai/coach";
+import { estimateExercise } from "@/lib/ai/estimator";
+import { Sparkles } from "lucide-react";
 import {
   KIND_LABEL,
+  formatDuration,
+  formatWeight,
   formatCompact,
   formatDate,
   formatLongDuration,
@@ -33,8 +38,27 @@ export default function WorkoutDetailPage({ params }: PageProps<"/history/[id]">
 }
 
 async function Detail({ id }: { id: string }) {
-  const [profile, w, exercises, tz] = await Promise.all([getCurrentUser(), getWorkout(id), getExerciseMap(), getTimeZone()]);
+  const [profile, w, exercises, tz, all, measurements] = await Promise.all([getCurrentUser(), getWorkout(id), getExerciseMap(), getTimeZone(), getWorkouts(), getMeasurements()]);
   if (!w) notFound();
+
+  // How this workout moved the AI's estimates (before = everything older than it).
+  const coach = coachProfile(profile, measurements, new Date(w.startedAt));
+  const idx = all.findIndex((x) => x.id === w.id);
+  const updates = w.exercises.flatMap((we) => {
+    const ex = exercises.get(we.exerciseId);
+    if (!ex || idx < 0) return [];
+    const at = new Date(w.endedAt);
+    const before = estimateExercise(ex, all.slice(idx + 1), coach, at);
+    const after = estimateExercise(ex, all.slice(idx), coach, at);
+    if (!before || !after || before.value <= 0) return [];
+    const change = (after.value - before.value) / before.value;
+    if (Math.abs(change) < 0.005) return [];
+    const better = ex.kind === "cardio" ? change < 0 : change > 0;
+    const fmt = (v: number) =>
+      ex.kind === "strength" ? formatWeight(v, profile.unit) : ex.kind === "bodyweight" ? `${Math.round(v)} reps` : ex.kind === "timed" ? formatDuration(v) : `${formatDuration(v)}/km`;
+    const what = ex.kind === "strength" ? "est. max" : ex.kind === "bodyweight" ? "rep capacity" : ex.kind === "timed" ? "hold" : "pace";
+    return [{ ex, text: `${what} ${fmt(before.value)} → ${fmt(after.value)}`, better, first: before.source === "profile" }];
+  });
   const unit = profile.unit;
   const sets = w.exercises.flatMap((e) => e.sets).filter((s) => s.completed && s.type !== "warmup").length;
   const volume = workoutVolumeKg(w, exercises);
@@ -51,6 +75,23 @@ async function Detail({ id }: { id: string }) {
         <StatTile label="Volume" value={volume ? formatCompact(toDisplayWeight(volume, unit)) : "–"} unit={volume ? unit : undefined} />
         <StatTile label="Sets" value={String(sets)} />
       </div>
+
+      {updates.length > 0 && (
+        <section aria-labelledby="ai-update" className="mb-6 rounded-[var(--radius-card)] bg-accent/10 p-4">
+          <h2 id="ai-update" className="mb-2 flex items-center gap-2 text-headline font-semibold">
+            <Sparkles className="size-4 text-accent" aria-hidden /> AI update
+          </h2>
+          <ul className="flex flex-col gap-1.5 text-subhead">
+            {updates.map((u) => (
+              <li key={u.ex.id}>
+                <span className="font-semibold">{u.ex.name}</span>: {u.text}{" "}
+                <span className={u.better ? "text-green-text" : "text-label-2"}>{u.first ? "(first real data, replaces the profile guess)" : u.better ? "↑" : "↓"}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-footnote text-label-2">Your next suggested workout uses these numbers.</p>
+        </section>
+      )}
 
       {w.exercises.map((we) => {
         const ex = exercises.get(we.exerciseId);

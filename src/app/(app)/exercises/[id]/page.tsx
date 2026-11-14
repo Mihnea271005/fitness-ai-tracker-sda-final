@@ -11,7 +11,11 @@ import { getCurrentUser } from "@/lib/auth";
 import { getExerciseMap, getTimeZone, getWorkouts } from "@/lib/data";
 import { exerciseMeta, formatDate, formatDuration, formatSet, formatWeight } from "@/lib/format";
 import { exerciseHistory } from "@/lib/stats";
-import { lastSessionSets, suggestFirstSet } from "@/lib/suggest";
+import { CATALOG } from "@/lib/ai/catalog";
+import { coachProfile, trainingSettings } from "@/lib/ai/coach";
+import { estimateExercise } from "@/lib/ai/estimator";
+import { suggestStart, targetFor } from "@/lib/ai/prescribe";
+import { getMeasurements } from "@/lib/data";
 
 export default function ExerciseDetailPage({ params }: PageProps<"/exercises/[id]">) {
   return (
@@ -24,7 +28,7 @@ export default function ExerciseDetailPage({ params }: PageProps<"/exercises/[id
 }
 
 async function Detail({ id }: { id: string }) {
-  const [profile, exercises, workouts, tz] = await Promise.all([getCurrentUser(), getExerciseMap(), getWorkouts(), getTimeZone()]);
+  const [profile, exercises, workouts, tz, measurements] = await Promise.all([getCurrentUser(), getExerciseMap(), getWorkouts(), getTimeZone(), getMeasurements()]);
   const ex = exercises.get(id);
   if (!ex) notFound();
   const unit = profile.unit;
@@ -32,7 +36,10 @@ async function Detail({ id }: { id: string }) {
 
   const history = exerciseHistory(workouts, ex);
   const best = history.length ? history.reduce((a, b) => ((ex.kind === "cardio" ? b.value < a.value && b.value > 0 : b.value > a.value) ? b : a)) : null;
-  const suggestion = suggestFirstSet(ex, lastSessionSets(workouts, ex.id), unit);
+  const coach = coachProfile(profile, measurements);
+  const settings = trainingSettings(profile);
+  const estimate = estimateExercise(ex, workouts, coach);
+  const suggestion = suggestStart(ex, estimate, targetFor(settings.goal, ex, CATALOG[ex.slug ?? ""]?.compound ?? true, coach.experience, settings.sessionMinutes), unit);
   const bestLabel = ex.kind === "strength" ? "Best est. 1RM" : ex.kind === "bodyweight" ? "Most reps" : ex.kind === "timed" ? "Longest hold" : "Fastest pace";
   const bestValue = !best
     ? "–"

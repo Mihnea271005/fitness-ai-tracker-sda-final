@@ -14,10 +14,12 @@ export interface DraftSetInput {
   reps?: number;
   durationS?: number;
   distanceM?: number;
+  feel?: -1 | 0 | 1;
   completed: boolean;
 }
 export interface DraftWorkoutInput {
   title: string;
+  planDay?: string;
   startedAt: string;
   notes?: string;
   exercises: { exerciseId: string; sets: DraftSetInput[] }[];
@@ -34,15 +36,16 @@ function cleanSet(s: DraftSetInput, kind: ExerciseKind) {
   const reps = finite(s.reps, 0, 1000);
   const duration_s = finite(s.durationS, 0, 86_400);
   const distance_m = finite(s.distanceM, 0, 1_000_000);
+  const feel = s.feel === -1 || s.feel === 0 || s.feel === 1 ? s.feel : null;
   switch (kind) {
     case "strength":
-      return reps ? { type, weight_kg: weight_kg ?? 0, reps: Math.round(reps) } : null;
+      return reps ? { type, weight_kg: weight_kg ?? 0, reps: Math.round(reps), feel } : null;
     case "bodyweight":
-      return reps ? { type, weight_kg: weight_kg || null, reps: Math.round(reps) } : null;
+      return reps ? { type, weight_kg: weight_kg || null, reps: Math.round(reps), feel } : null;
     case "timed":
-      return duration_s ? { type, weight_kg: weight_kg || null, duration_s: Math.round(duration_s) } : null;
+      return duration_s ? { type, weight_kg: weight_kg || null, duration_s: Math.round(duration_s), feel } : null;
     case "cardio":
-      return duration_s || distance_m ? { type, duration_s: duration_s ? Math.round(duration_s) : null, distance_m: distance_m ? Math.round(distance_m) : null } : null;
+      return duration_s || distance_m ? { type, duration_s: duration_s ? Math.round(duration_s) : null, distance_m: distance_m ? Math.round(distance_m) : null, feel } : null;
   }
 }
 
@@ -70,6 +73,7 @@ export async function saveWorkout(draft: DraftWorkoutInput): Promise<{ id?: stri
     payload: [
       {
         title: String(draft.title ?? "").trim().slice(0, 80) || "Workout",
+        plan_day: /^[a-z_]{1,20}$/.test(String(draft.planDay ?? "")) ? draft.planDay : null,
         started_at: startedAt,
         ended_at: new Date(now).toISOString(),
         notes: String(draft.notes ?? "").slice(0, 2000),

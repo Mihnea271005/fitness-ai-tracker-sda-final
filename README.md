@@ -1,6 +1,6 @@
 # Fitness AI Tracker
 
-A workout tracker for phone, tablet and desktop. You log strength, bodyweight, cardio and timed-hold exercises, and it suggests your next set from what you did last time. It's built as an installable web app (a PWA) using **Next.js 16, TypeScript and Tailwind CSS v4**. Accounts and data will come from **Supabase** (Postgres + Auth).
+A workout tracker for phone, tablet and desktop with a built-in AI coach. You log strength, bodyweight, cardio and timed-hold exercises; the AI builds workouts for you and suggests the weight and reps for every set, starting from your profile on day one and learning from what you log. It's an installable web app (a PWA) built with **Next.js 16, TypeScript and Tailwind CSS v4**, with accounts and data in **Supabase** (Postgres + Auth).
 
 > The original Streamlit / FastAPI / Expo version is kept in [`legacy/`](legacy/).
 
@@ -8,12 +8,44 @@ A workout tracker for phone, tablet and desktop. You log strength, bodyweight, c
 
 | Stage | What | State |
 |---|---|---|
-| 1 | Design and layout: every page, responsive, PWA, sample data | **Done** |
-| 2 | Accounts: email/password + Google sign-in (Supabase Auth), private data per user | Next |
-| 3 | Workout logging saved to Postgres, custom exercises, history, CSV export | Planned |
-| 4 | Next-set suggestions: progressive-overload rules with unit tests | Planned |
+| 1 | Design and layout: every page, responsive, PWA | Done |
+| 2 | Accounts: email/password + Google sign-in, private data per user | Done |
+| 3 | Workouts, custom exercises, routines, body measurements, history, CSV export | Done |
+| 4 | AI coach: training profile, strength prediction, generated workouts, live set coaching | **In progress** |
+| 5 | Goals, achievements, reminders, sharing | Planned |
 
-In stage 1 everything runs on sample data in [`src/lib/mock-data.ts`](src/lib/mock-data.ts). The workout logger already works. An in-progress workout is kept in the browser, so refreshing the page doesn't lose it, but "Finish" doesn't save anything yet.
+## Setup
+
+1. Create a free Supabase project. Run the files in [`supabase/migrations/`](supabase/migrations/) in order in its SQL Editor.
+2. Copy `.env.example` to `.env.local` and fill in the project URL and publishable key.
+3. In Supabase → Authentication → URL Configuration, add `http://localhost:3000/**` to the Redirect URLs.
+
+## The AI coach
+
+All of it is free and runs inside the app: no paid AI service, and your data never leaves your database.
+
+1. **Training profile.** An optional questionnaire covers sex (male / female / prefer not to say), age, height, weight, experience, days per week, session length, goal, focus areas, equipment (gym / dumbbells / bodyweight only), exercises to avoid, and whether you want a weekly plan or one workout at a time.
+2. **No-history prediction** ([`ml/train_strength_model.py`](ml/train_strength_model.py)). A model trained on public-domain OpenPowerlifting results predicts squat, bench and deadlift from sex, age and body weight. Other exercises are derived through typical strength ratios ([`src/lib/ai/catalog.ts`](src/lib/ai/catalog.ts)), then scaled to your experience. On held-out lifters it's within about ±16–20% on average. That spread is why the first workout is deliberately light.
+3. **History model** ([`src/lib/ai/estimator.ts`](src/lib/ai/estimator.ts)). Your logged sets take over from the profile guess, with recent sessions weighted most. It accounts for how sets felt (too easy / just right / too hard) and for time off. Its settings were tuned on the first half of a real 721-workout training log and tested on the second half:
+
+   | Predictor (next-session estimated max) | Mean error |
+   |---|---|
+   | Same as last session | 16.4% |
+   | Average of last 3 | 14.8% |
+   | **AI estimator** | **14.4%** |
+
+4. **Workout generator** ([`src/lib/ai/generator.ts`](src/lib/ai/generator.ts)). It picks a split from your training days (full body, upper/lower, or push/pull/legs) and fills each slot with an exercise that fits your equipment, focus and history. Sets, reps and rest follow your goal, and weights come from the estimator.
+5. **Live coaching** ([`src/lib/ai/prescribe.ts`](src/lib/ai/prescribe.ts)). Each set's suggestion adapts to the previous one. It also adds a weight step when every set was hit, and suggests a lighter week after two sessions of missed reps.
+
+Run `npm test` for the unit tests and the training-log evaluation. To retrain the population model:
+
+```bash
+python -m venv ml/.venv && ml/.venv/Scripts/pip install -r ml/requirements.txt
+curl -L -o ml/data/openipf-latest.zip https://openpowerlifting.gitlab.io/opl-csv/files/openipf-latest.zip
+ml/.venv/Scripts/python ml/train_strength_model.py
+```
+
+This app uses data from the OpenPowerlifting project, https://www.openpowerlifting.org. You may download a copy of the data at https://gitlab.com/openpowerlifting/opl-data.
 
 ## Running it
 
