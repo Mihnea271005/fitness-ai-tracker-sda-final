@@ -136,8 +136,10 @@ export function estimateExercise(ex: Exercise, workouts: Workout[], p: CoachProf
     }
     const fromHistory = num / den;
     // The profile guess only fills in for missing data: it may pull the estimate UP
-    // (light calibration sets understate a strong lifter) but never below what the
-    // person has actually demonstrated.
+    // (light calibration sets understate a strong lifter) but never below the history.
+    // The history itself is an average, so after a jump in weight it can trail the
+    // latest session. A hard floor here predicts worse (14.4% → 15.3% held-out error),
+    // so suggestStart enforces "never below what was just lifted" on the suggested load instead.
     const lowerIsBetter = ex.kind === "cardio";
     const priorIsHigher = prior !== undefined && (lowerIsBetter ? prior < fromHistory : prior > fromHistory);
     value = priorIsHigher ? (num + opts.priorWeight * prior!) / (den + opts.priorWeight) : fromHistory;
@@ -145,7 +147,8 @@ export function estimateExercise(ex: Exercise, workouts: Workout[], p: CoachProf
     if (opts.latestFloor > 0) value = ex.kind === "cardio" ? Math.min(value, sessions[0].value * (2 - opts.latestFloor)) : Math.max(value, sessions[0].value * opts.latestFloor);
     source = priorIsHigher && sessions.length < 3 ? "blend" : "history";
 
-    // Time off: lose ~1% per week after two weeks away (capped at 15%).
+    // Time off: lose ~1% per week after two weeks away (capped at 15%). This is the one
+    // deliberate way a suggestion can go below the last session (detraining is real).
     daysSinceLast = Math.floor((now.getTime() - latest) / DAY);
     if (daysSinceLast > 14) {
       const loss = Math.min(0.15, ((daysSinceLast - 14) / 7) * 0.01);

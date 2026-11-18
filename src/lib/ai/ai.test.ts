@@ -4,6 +4,7 @@ import { estimateExercise, priorEstimate, type CoachProfile } from "./estimator"
 import { generateWorkout, nextDayType, splitFor, weekPlan, type TrainingSettings } from "./generator";
 import { predictCompetitionLift, predictOneRepMax } from "./population";
 import { adjustNext, roundLoad, suggestStart, targetFor } from "./prescribe";
+import { fromDisplayWeight } from "../format";
 import type { Exercise, Workout, WorkoutSet } from "../types";
 
 /* ------------------------------------------------------------------ fixtures */
@@ -167,6 +168,41 @@ describe("prescriptions", () => {
     const s = suggestStart(bench, est, { ...t, reps: 8 }, "kg")!;
     expect(s.values.weightKg).toBe(80); // 90 × 0.9 = 81 → 80
     expect(s.reason).toContain("lighter week");
+  });
+
+  it("a progressing lifter is never told to go below what they just lifted", () => {
+    // Reported case: 50 kg × 8 two weeks ago, 67.5 kg × 8/8/7 today. The history average
+    // (~80 kg e1RM) on its own would suggest ~60 kg × 8.
+    const ws = [workout(1, bench.id, [set(67.5, 8), set(67.5, 8), set(67.5, 7)]), workout(15, bench.id, [set(50, 8), set(50, 8), set(50, 8)])];
+    const est = estimateExercise(bench, ws, MAN, NOW)!;
+    expect(est.missesInARow).toBe(0);
+    const s = suggestStart(bench, est, { ...t, reps: 8 }, "kg")!;
+    expect(s.values.weightKg).toBe(67.5);
+    expect(s.reason).toContain("stay at 67.5 kg");
+  });
+
+  it("the floor also holds for fewer reps, but not after a long break", () => {
+    const ws = [workout(1, bench.id, [set(67.5, 8), set(67.5, 7)]), workout(15, bench.id, [set(50, 8)])];
+    expect(suggestStart(bench, estimateExercise(bench, ws, MAN, NOW)!, { ...t, reps: 6 }, "kg")!.values.weightKg!).toBeGreaterThanOrEqual(67.5);
+    // 6 weeks off: the documented time-off decay may take it below the last session.
+    const old = [workout(43, bench.id, [set(67.5, 8), set(67.5, 7)]), workout(57, bench.id, [set(50, 8)])];
+    expect(suggestStart(bench, estimateExercise(bench, old, MAN, NOW)!, { ...t, reps: 8 }, "kg")!.values.weightKg!).toBeLessThan(67.5);
+  });
+
+  it("the floor survives rounding: off-step weights and dumbbells", () => {
+    const db = { ...bench, id: "db", slug: null, weightIncrementKg: 2 }; // custom dumbbell exercise: history only, no profile guess
+    for (const [e, w] of [[bench, 66], [db, 25]] as const) {
+      const ws = [workout(1, e.id, [set(w, 8), set(w, 7)]), workout(15, e.id, [set(w * 0.75, 8)])];
+      const s = suggestStart(e, estimateExercise(e, ws, MAN, NOW)!, { ...t, reps: 8 }, "kg")!;
+      expect(s.values.weightKg).toBe(w); // not 65 / 24
+      expect(s.reason).toContain(`stay at ${w} kg`);
+    }
+  });
+
+  it("re-suggesting a weight logged in lb doesn't drop a plate", () => {
+    // 145 lb is stored as 65.77 kg (2 decimals) = 144.998 lb, which must still round to 145.
+    expect(roundLoad(fromDisplayWeight(145, "lb"), 2.5, "lb") / 0.45359237).toBeCloseTo(145, 1);
+    expect(roundLoad(fromDisplayWeight(185, "lb"), 2.5, "lb") / 0.45359237).toBeCloseTo(185, 1);
   });
 
   it("first session from the profile is deliberately light", () => {

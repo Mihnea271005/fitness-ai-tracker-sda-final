@@ -16,11 +16,14 @@ export const getCurrentUser = cache(async (): Promise<Profile> => {
   const claims = data?.claims;
   if (error || !claims?.sub) redirect("/login");
 
-  const { data: row } = await supabase
+  const { data: row, error: rowError } = await supabase
     .from("profiles")
     .select("display_name, unit, weekly_goal, sex, birth_year, height_cm, experience, days_per_week, session_minutes, goal, focus, locations, avoid_exercises, plan_mode, onboarded_at")
     .eq("id", claims.sub)
     .maybeSingle();
+  // Fail loudly: a blank profile would look "not onboarded" and could overwrite real answers.
+  // (Typical cause: the code expects a column that a migration hasn't added yet.)
+  if (rowError) throw new Error(`Couldn't load your profile: ${rowError.message}`);
 
   const email = typeof claims.email === "string" ? claims.email : "";
   return {

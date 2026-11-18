@@ -44,16 +44,21 @@ export function targetFor(goal: Goal, ex: Exercise, compound: boolean, experienc
   return { sets: Math.max(2, t.sets[i] - fewer), reps: t.reps[i], restSeconds: t.rest[i] };
 }
 
-/** Round a load down to what you can actually put on the bar / pick up, in the user's unit. */
+/**
+ * Round a load down to what you can actually put on the bar / pick up, in the user's unit.
+ * The small tolerance absorbs the 2-decimal kg storage: 145 lb is stored as 65.77 kg
+ * (144.998 lb) and must still round to 145, not drop a whole plate.
+ */
 export function roundLoad(kg: number, incrementKg: number, unit: Unit): number {
   if (kg <= 0) return 0;
+  const TOLERANCE = 0.01; // of one step
   if (unit === "lb") {
     const step = incrementKg >= 2.5 ? 5 : 2.5;
-    const lb = Math.max(step, Math.floor(kg / KG_PER_LB / step) * step);
+    const lb = Math.max(step, Math.floor(kg / KG_PER_LB / step + TOLERANCE) * step);
     return Math.round(lb * KG_PER_LB * 100) / 100;
   }
   const step = incrementKg > 0 ? incrementKg : 2.5;
-  return Math.max(step, Math.floor(kg / step) * step);
+  return Math.max(step, Math.floor(kg / step + TOLERANCE) * step);
 }
 
 /** Load (kg) for `reps` reps leaving `rir` reps in reserve, given an estimated 1RM. */
@@ -73,23 +78,35 @@ export function suggestStart(ex: Exercise, est: Estimate | null, target: Target,
       // Calibration (profile only): leave ~5 reps in reserve — the guess can be ±20%.
       let kg = loadFor(est.value, reps, calibrating ? 5 : 2);
       const last = est.lastSets?.[0];
+      const lighterWeek = est.missesInARow >= 2 && !!last?.weightKg;
+      const timeOff = !!est.daysSinceLast && est.daysSinceLast > 14;
+      // Never below what was just lifted: if last time's first set hit at least today's
+      // reps, that weight is the floor. The estimate averages recent sessions (that's what
+      // predicts best), so after a jump in weight it can trail the latest session. The
+      // floor applies AFTER rounding, so an off-step weight (66 kg, 25 kg dumbbells) or a
+      // kg/lb mismatch is never rounded down below it. Only a lighter week or time off
+      // (> 2 weeks) may go lower.
+      const floorKg = !lighterWeek && !timeOff && last?.weightKg && last.reps && reps <= last.reps ? last.weightKg : 0;
+      const load = (k: number) => Math.max(roundLoad(k, ex.weightIncrementKg, unit), floorKg);
       let reason: string;
-      if (est.missesInARow >= 2 && last?.weightKg) {
-        kg = last.weightKg * 0.9;
-        reason = `You missed reps two sessions in a row at ${formatWeight(last.weightKg, unit)}, so take a lighter week: ${formatWeight(roundLoad(kg, ex.weightIncrementKg, unit), unit)} × ${reps}, then build back up.`;
+      if (lighterWeek) {
+        kg = last!.weightKg! * 0.9;
+        reason = `You missed reps two sessions in a row at ${formatWeight(last!.weightKg!, unit)}, so take a lighter week: ${formatWeight(load(kg), unit)} × ${reps}, then build back up.`;
       } else if (last?.weightKg && est.lastSets!.every((s) => (s.reps ?? 0) >= (last.reps ?? 0)) && est.lastSets!.every((s) => s.feel !== -1) && (last.reps ?? 0) >= reps) {
         // Double progression: everything was hit and nothing felt too hard → at least one step up.
         kg = Math.max(kg, last.weightKg + ex.weightIncrementKg);
-        reason = `You did ${formatWeight(last.weightKg, unit)} × ${last.reps} on all ${est.lastSets!.length} sets last time, so try ${formatWeight(roundLoad(kg, ex.weightIncrementKg, unit), unit)} × ${reps}.`;
+        reason = `You did ${formatWeight(last.weightKg, unit)} × ${last.reps} on all ${est.lastSets!.length} sets last time, so try ${formatWeight(load(kg), unit)} × ${reps}.`;
+      } else if (floorKg && load(kg) <= floorKg) {
+        reason = `You did ${formatWeight(floorKg, unit)} × ${last!.reps} last time, so stay at ${formatWeight(floorKg, unit)} and aim for ${reps} on every set.`;
       } else if (est.source === "profile") {
-        reason = `Starting estimate for your profile: about ${formatWeight(est.value, unit)} max, so ${formatWeight(roundLoad(kg, ex.weightIncrementKg, unit), unit)} × ${reps} should feel comfortable.`;
+        reason = `Starting estimate for your profile: about ${formatWeight(est.value, unit)} max, so ${formatWeight(load(kg), unit)} × ${reps} should feel comfortable.`;
       } else if (last?.weightKg && last.reps && Math.abs(last.reps - reps) >= 2) {
-        reason = `Your plan uses ${reps} reps here, so ${formatWeight(roundLoad(kg, ex.weightIncrementKg, unit), unit)} × ${reps}: about the same effort as your ${formatWeight(last.weightKg, unit)} × ${last.reps} last time (estimated max ${formatWeight(est.value, unit)}).`;
+        reason = `Your plan uses ${reps} reps here, so ${formatWeight(load(kg), unit)} × ${reps}: about the same effort as your ${formatWeight(last.weightKg, unit)} × ${last.reps} last time (estimated max ${formatWeight(est.value, unit)}).`;
       } else {
-        reason = `Your recent sets put your max around ${formatWeight(est.value, unit)}, so ${formatWeight(roundLoad(kg, ex.weightIncrementKg, unit), unit)} × ${reps} leaves about 2 reps in reserve.`;
+        reason = `Your recent sets put your max around ${formatWeight(est.value, unit)}, so ${formatWeight(load(kg), unit)} × ${reps} leaves about 2 reps in reserve.`;
       }
-      if (est.daysSinceLast && est.daysSinceLast > 14) reason += ` It's been ${Math.round(est.daysSinceLast / 7)} weeks, so this is eased off a little.`;
-      return { values: { weightKg: roundLoad(kg, ex.weightIncrementKg, unit), reps }, reason: reason + calibrateNote };
+      if (timeOff) reason += ` It's been ${Math.round(est.daysSinceLast! / 7)} weeks, so this is eased off a little.`;
+      return { values: { weightKg: load(kg), reps }, reason: reason + calibrateNote };
     }
     case "bodyweight": {
       const max = est.value;
