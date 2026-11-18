@@ -73,7 +73,7 @@ npm run build
 - **The dev server compiles routes on first visit** (10 s+), and streams pages with Suspense: a "Rendering…" pill in the bottom-left means it isn't done. Wait for real content (`settle(page)` or a specific `getByRole(...)`) before screenshots.
 - **The dev server can serve a stale `globals.css`** after edits (seen with new `@keyframes`): the rule is in `npm run build` output but not in the served chunk. Restart `npm run dev` before judging CSS-only changes.
 - **Type decimals key by key** to test inputs like a user: `locator.pressSequentially("82,5")`. `fill()` sets the whole string at once and hid a real bug (82,5 → 825).
-- **Open the app by name, not IP.** Supabase's firewall answers auth requests whose redirect URL is a raw IP (e.g. `http://100.x.y.z:3000`) with a 403 HTML page.
+- **Open the app by name, not IP.** Supabase's firewall answers auth requests whose redirect URL is a raw IP (e.g. a Tailscale `http://100.x.y.z:3000`) with a 403 HTML page.
 - **Phone full-page screenshots show the fixed tab bar mid-page.** That's how full-page capture works; to judge overlap, take a viewport screenshot (`page.screenshot({ fullPage: false })`).
 - **Headless Edge reports `navigator.canShare` as true** but sharing produces nothing; to test the share image, fetch `/share/workout/<id>?format=story|square` with `page.request.get(...)` in the logged-in context and save the PNG.
 - **The active workout lives in localStorage** until "Finish"; a fresh browser context starts with none.

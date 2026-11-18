@@ -24,7 +24,7 @@ async function siteOrigin() {
 
 /**
  * Supabase's firewall answers any auth request whose redirect URL points at a raw IP
- * (e.g. http://100.x.y.z:3000 over Tailscale or LAN) with a 403 HTML page. Open the
+ * (e.g. a Tailscale or LAN address like http://100.x.y.z:3000) with a 403 HTML page. Open the
  * app by name instead (localhost, or a MagicDNS / LAN hostname).
  */
 function isIpOrigin(origin: string) {
