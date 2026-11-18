@@ -85,8 +85,12 @@ export function ExerciseForm({
               value={kind}
               onChange={(k) => {
                 setKind(k);
-                if (k === "cardio") setMuscle("cardio");
+                if (k === "cardio") {
+                  setMuscle("cardio");
+                  setEquipment("cardio machine");
+                } else if (muscle === "cardio") setMuscle("chest");
                 if (k === "bodyweight" || k === "timed") setEquipment(k === "bodyweight" ? "bodyweight" : "none");
+                else if (k === "strength" && equipment === "cardio machine") setEquipment("barbell");
               }}
               className="min-w-max"
               options={KINDS.map((k) => ({ value: k, label: KIND_LABEL[k] }))}
@@ -109,7 +113,7 @@ export function ExerciseForm({
             label="Weight increment (kg)"
             name="increment"
             inputMode="decimal"
-            defaultValue={String(exercise?.weightIncrementKg ?? 2.5)}
+            defaultValue={String(exercise?.weightIncrementKg || 2.5)}
             aria-describedby="inc-help"
           />
           <p id="inc-help" className="mt-1.5 px-1 text-footnote text-label-2">

@@ -9,6 +9,12 @@ import { ActiveNav, ActiveWorkoutAccessory, NavList } from "./nav";
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[70] focus:rounded-full focus:bg-accent focus:px-4 focus:py-2.5 focus:text-body focus:font-semibold focus:text-white"
+      >
+        Skip to content
+      </a>
       {/* Sidebar — regular width (tablet / desktop). Floats on a glass panel. */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-[17rem] p-2 md:block">
         <nav aria-label="Main" className="glass flex h-full flex-col rounded-[var(--radius-card)] px-3 pt-5 pb-3">
@@ -29,7 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      <main className="px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] md:ml-[17rem] md:px-8 md:pb-12">
+      <main id="main" tabIndex={-1} className="outline-none px-4 pb-[calc(7rem+env(safe-area-inset-bottom))] md:ml-[17rem] md:px-8 md:pb-12">
         <div className="mx-auto w-full max-w-3xl">{children}</div>
       </main>
 

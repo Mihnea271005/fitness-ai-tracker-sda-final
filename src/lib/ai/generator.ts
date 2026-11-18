@@ -63,7 +63,8 @@ const SLOTS: Record<DayType, Pattern[]> = {
   upper: ["h_push", "h_pull", "v_push", "v_pull", "biceps", "triceps", "delts"],
   lower: ["squat", "hinge", "lunge", "glutes", "calves", "core"],
   push: ["h_push", "v_push", "h_push", "delts", "triceps", "core"],
-  pull: ["v_pull", "h_pull", "hinge", "biceps", "core"],
+  // No hinge on pull days: legs/lower already have it, and on 5–6 day splits pull and legs are back to back.
+  pull: ["v_pull", "h_pull", "h_pull", "biceps", "core"],
   legs: ["squat", "hinge", "lunge", "glutes", "calves", "core"],
 };
 
@@ -109,11 +110,24 @@ function buildSlots(day: DayType, settings: TrainingSettings, experience: Experi
     if (j < 0) break;
     base.splice(j, 1);
   }
+  // Goal additions stay within the session length: at the cap, each one takes the place of the
+  // last isolation slot that isn't a goal or focus (else the last such slot after the main lift).
+  const makeRoom = () => {
+    if (base.length < cap) return true;
+    let i = base.findLastIndex((p, k) => k > 0 && ISOLATION.includes(p) && !focusPatterns.has(p) && !goals.has(p));
+    if (i < 0) i = base.findLastIndex((p, k) => k > 0 && !focusPatterns.has(p) && !goals.has(p));
+    if (i < 0) return false;
+    base.splice(i, 1);
+    return true;
+  };
   // A goal exercise whose pattern no day of the split trains (e.g. calves or delts on full-body
   // days, or a running goal) gets its own slot, so it still comes up every session.
   const cycle = new Set(splitFor(settings.daysPerWeek).flatMap((d) => SLOTS[d]));
-  for (const p of goalPatterns.filter((p) => !cycle.has(p) && p !== "cardio" && !base.includes(p)).slice(0, MAX_GOAL_EXTRAS)) base.push(p);
-  if (settings.goal === "endurance" || settings.goal === "fat_loss" || settings.bodyWeightGoal === "lose" || goals.has("cardio")) base.push("cardio");
+  for (const p of goalPatterns.filter((p) => !cycle.has(p) && p !== "cardio" && !base.includes(p)).slice(0, MAX_GOAL_EXTRAS)) if (makeRoom()) base.push(p);
+  // Endurance / fat-loss profiles always finish with cardio (part of the plan's time budget);
+  // cardio added only because of a goal has to make room like the other goal slots.
+  if (settings.goal === "endurance" || settings.goal === "fat_loss") base.push("cardio");
+  else if ((settings.bodyWeightGoal === "lose" || goals.has("cardio")) && makeRoom()) base.push("cardio");
   return base;
 }
 

@@ -33,9 +33,14 @@ export function ProgressBar({ value, label }: { value: number; label: string }) 
   const pct = Math.round(value * 100);
   return (
     <div role="progressbar" aria-label={label} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} className="h-2 overflow-hidden rounded-full bg-fill-3">
-      <div className={value >= 1 ? "h-full rounded-full bg-green" : "h-full rounded-full bg-accent"} style={{ width: `${Math.max(pct, 2)}%` }} />
+      {pct > 0 && <div className={value >= 1 ? "h-full rounded-full bg-green" : "h-full rounded-full bg-accent"} style={{ width: `${Math.max(pct, 2)}%` }} />}
     </div>
   );
+}
+
+/** "Ready" when the numbers say it's doable now (not yet done), otherwise the percentage. */
+export function goalPercentLabel(s: GoalStatus): string {
+  return !s.achievedAt && s.projection.kind === "ready" ? "Ready" : `${Math.round(s.progress * 100)}%`;
 }
 
 /** A goal in a ListSection: title, progress bar, where it stands and where it's heading. */
@@ -47,9 +52,9 @@ export function GoalRow({ status: s, unit, tz, removable = true }: { status: Goa
         <div className="mb-1.5 flex items-center gap-1.5 text-body">
           {s.achievedAt && <CheckCircle2 className="size-4 shrink-0 text-green-text" aria-hidden />}
           <span className="truncate">{s.title}</span>
-          <span className="ml-auto shrink-0 pl-2 text-subhead font-semibold tabular text-label-2">{Math.round(s.progress * 100)}%</span>
+          <span className="ml-auto shrink-0 pl-2 text-subhead font-semibold tabular text-label-2">{goalPercentLabel(s)}</span>
         </div>
-        <ProgressBar value={s.progress} label={`${s.title}: ${Math.round(s.progress * 100)}% there`} />
+        <ProgressBar value={s.progress} label={`${s.title}: ${goalPercentLabel(s) === "Ready" ? "ready to try" : `${goalPercentLabel(s)} there`}`} />
         {now && !s.achievedAt && <div className="mt-1.5 text-subhead text-label-2">{now}</div>}
         <div className="text-footnote text-label-2">{goalOutlook(s, tz)}</div>
       </div>

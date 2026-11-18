@@ -70,10 +70,13 @@ export function priorEstimate(ex: Exercise, p: CoachProfile): number | undefined
     case "timed":
       return c.seconds ? c.seconds[p.experience] * sexFactor(c.femaleFactor) : undefined;
     case "cardio": {
-      const base = { new: 420, under_1: 390, "1_to_3": 345, over_3: 315 }[p.experience];
+      // Running paces; other machines scale by their catalogue factor (cycling covers a km much faster).
+      const factor = c.paceFactor ?? 1;
+      if (factor <= 0) return undefined;
+      const base = { new: 420, under_1: 390, "1_to_3": 345, over_3: 315 }[p.experience] * factor;
       const sexAdj = p.sex === "female" ? 25 : p.sex === "unspecified" ? 12 : 0;
       const ageAdj = p.age && p.age > 35 ? 1 + (p.age - 35) * 0.005 : 1;
-      return (base + sexAdj) * ageAdj;
+      return (base + sexAdj * factor) * ageAdj; // the sex offset is a running-pace difference too
     }
   }
 }

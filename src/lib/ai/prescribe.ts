@@ -61,6 +61,9 @@ export function roundLoad(kg: number, incrementKg: number, unit: Unit): number {
   return Math.max(step, Math.floor(kg / step + TOLERANCE) * step);
 }
 
+/** The load step for "go heavier": never 0, even for an exercise saved without an increment. */
+const stepOf = (ex: Exercise) => (ex.weightIncrementKg > 0 ? ex.weightIncrementKg : 2.5);
+
 /** Load (kg) for `reps` reps leaving `rir` reps in reserve, given an estimated 1RM. */
 export function loadFor(e1rm: number, reps: number, rir = 2) {
   return e1rm / (1 + (reps + rir) / 30);
@@ -94,8 +97,9 @@ export function suggestStart(ex: Exercise, est: Estimate | null, target: Target,
         reason = `You missed reps two sessions in a row at ${formatWeight(last!.weightKg!, unit)}, so take a lighter week: ${formatWeight(load(kg), unit)} × ${reps}, then build back up.`;
       } else if (last?.weightKg && est.lastSets!.every((s) => (s.reps ?? 0) >= (last.reps ?? 0)) && est.lastSets!.every((s) => s.feel !== -1) && (last.reps ?? 0) >= reps) {
         // Double progression: everything was hit and nothing felt too hard → at least one step up.
-        kg = Math.max(kg, last.weightKg + ex.weightIncrementKg);
-        reason = `You did ${formatWeight(last.weightKg, unit)} × ${last.reps} on all ${est.lastSets!.length} sets last time, so try ${formatWeight(load(kg), unit)} × ${reps}.`;
+        kg = Math.max(kg, last.weightKg + stepOf(ex));
+        const n = est.lastSets!.length;
+        reason = `You did ${formatWeight(last.weightKg, unit)} × ${last.reps} ${n === 1 ? "on your set" : `on all ${n} sets`} last time, so try ${formatWeight(load(kg), unit)} × ${reps}.`;
       } else if (floorKg && load(kg) <= floorKg) {
         reason = `You did ${formatWeight(floorKg, unit)} × ${last!.reps} last time, so stay at ${formatWeight(floorKg, unit)} and aim for ${reps} on every set.`;
       } else if (est.source === "profile") {
@@ -114,7 +118,7 @@ export function suggestStart(ex: Exercise, est: Estimate | null, target: Target,
       const last = est.lastSets?.[0];
       const reason =
         last?.reps && !calibrating
-          ? `Last time your best set was ${Math.round(max)} reps, so aim for ${reps} per set and add one when it feels easy.`
+          ? `Last time your best set was ${Math.max(...est.lastSets!.map((s) => s.reps ?? 0))} reps, so aim for ${reps} per set and add one when it feels easy.`
           : `Aim for ${reps} controlled reps per set; stop with a couple left in the tank.`;
       return { values: { reps, weightKg: last?.weightKg }, reason: reason + calibrateNote };
     }
@@ -143,11 +147,11 @@ export function adjustNext(ex: Exercise, done: Partial<WorkoutSet>, target: Targ
       if (!done.weightKg || !done.reps) return null;
       const goalReps = target.reps ?? done.reps;
       if (done.reps >= goalReps + 2 || feel === 1) {
-        const kg = done.weightKg + ex.weightIncrementKg;
+        const kg = done.weightKg + stepOf(ex);
         return { values: { weightKg: kg, reps: goalReps }, reason: `That looked easy, so go up to ${formatWeight(kg, unit)}.` };
       }
       if (done.reps <= goalReps - 2 || feel === -1) {
-        const kg = roundLoad(Math.min(done.weightKg - ex.weightIncrementKg, loadFor(epley(done.weightKg, done.reps), goalReps, 1)), ex.weightIncrementKg, unit);
+        const kg = roundLoad(Math.min(done.weightKg - stepOf(ex), loadFor(epley(done.weightKg, done.reps), goalReps, 1)), stepOf(ex), unit);
         return { values: { weightKg: kg, reps: goalReps }, reason: `That was tough, so drop to ${formatWeight(kg, unit)} to keep good reps.` };
       }
       return { values: { weightKg: done.weightKg, reps: goalReps }, reason: `Good set. Same again.` };

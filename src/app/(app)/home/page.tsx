@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { ChevronRight, Dumbbell, Flame, Play, Sparkles, Target, Timer, Trophy, Weight } from "lucide-react";
-import { ProgressBar, goalOutlook } from "@/components/goal-row";
+import { ProgressBar, goalOutlook, goalPercentLabel } from "@/components/goal-row";
 import { PageHeader } from "@/components/ui/interactive";
 import { ButtonLink, Card, ListSection, SectionTitle, StatTile } from "@/components/ui/primitives";
 import { GoalRing } from "@/components/goal-ring";
@@ -89,7 +89,7 @@ async function Home() {
           </h2>
           <p className="mt-1 mb-4 text-subhead text-label-2">
             <Flame className="mr-1 inline size-4 align-[-2px] text-orange" aria-hidden />
-            {streak === 1 ? "1-week streak" : `${streak}-week streak`}
+            {streak === 1 ? "1-week training streak" : `${streak}-week training streak`}
           </p>
           <ButtonLink href="/workout" size="large" className="w-full sm:w-auto">
             <Play className="size-5 fill-current" aria-hidden /> Start workout
@@ -106,7 +106,7 @@ async function Home() {
           </div>
           <div className="mb-2 flex items-baseline gap-2">
             <span className="min-w-0 flex-1 truncate text-headline font-semibold">{topGoal.title}</span>
-            <span className="font-rounded text-title3 font-bold tabular">{Math.round(topGoal.progress * 100)}%</span>
+            <span className="font-rounded text-title3 font-bold tabular">{goalPercentLabel(topGoal)}</span>
           </div>
           <ProgressBar value={topGoal.progress} label={`${topGoal.title}: ${Math.round(topGoal.progress * 100)}% there`} />
           <p className="mt-2 text-footnote text-label-2">{goalOutlook(topGoal, tz)}</p>

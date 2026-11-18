@@ -13,13 +13,17 @@ import { getExerciseMap, getMeasurements, getTimeZone, getWorkout, getWorkouts }
 import { coachProfile } from "@/lib/ai/coach";
 import { estimateExercise } from "@/lib/ai/estimator";
 import { Sparkles } from "lucide-react";
+import { Celebration, type CelebrationItem } from "@/components/celebration";
+import { ShareWorkout } from "@/components/share-workout";
+import { achievements, workoutPRs } from "@/lib/achievements";
+import { localYmd } from "@/lib/format";
+import type { Metadata } from "next";
 import {
   KIND_LABEL,
   formatDuration,
   formatWeight,
   formatCompact,
   formatDate,
-  formatLongDuration,
   formatSet,
   formatTime,
   toDisplayWeight,
@@ -27,17 +31,24 @@ import {
   workoutVolumeKg,
 } from "@/lib/format";
 
-export default function WorkoutDetailPage({ params }: PageProps<"/history/[id]">) {
+// Page title = the workout's title. The page already renders per request (Suspense + user
+// data), so this metadata streams with it (Next 16 + Cache Components).
+export async function generateMetadata({ params }: PageProps<"/history/[id]">): Promise<Metadata> {
+  const w = await getWorkout((await params).id);
+  return { title: w?.title ?? "Workout" };
+}
+
+export default function WorkoutDetailPage({ params, searchParams }: PageProps<"/history/[id]">) {
   return (
     <Suspense fallback={<PageHeader title="Workout" back={{ href: "/history", label: "History" }} />}>
-      {params.then(({ id }) => (
-        <Detail id={id} />
+      {Promise.all([params, searchParams]).then(([{ id }, sp]) => (
+        <Detail id={id} justSaved={sp.saved === "1"} />
       ))}
     </Suspense>
   );
 }
 
-async function Detail({ id }: { id: string }) {
+async function Detail({ id, justSaved }: { id: string; justSaved: boolean }) {
   const [profile, w, exercises, tz, all, measurements] = await Promise.all([getCurrentUser(), getWorkout(id), getExerciseMap(), getTimeZone(), getWorkouts(), getMeasurements()]);
   if (!w) notFound();
 
@@ -56,12 +67,27 @@ async function Detail({ id }: { id: string }) {
     const better = ex.kind === "cardio" ? change < 0 : change > 0;
     const fmt = (v: number) =>
       ex.kind === "strength" ? formatWeight(v, profile.unit) : ex.kind === "bodyweight" ? `${Math.round(v)} reps` : ex.kind === "timed" ? formatDuration(v) : `${formatDuration(v)}/km`;
+    if (fmt(before.value) === fmt(after.value)) return []; // "11 reps → 11 reps" says nothing
     const what = ex.kind === "strength" ? "est. max" : ex.kind === "bodyweight" ? "rep capacity" : ex.kind === "timed" ? "hold" : "pace";
     return [{ ex, text: `${what} ${fmt(before.value)} → ${fmt(after.value)}`, better, first: before.source === "profile" }];
   });
   const unit = profile.unit;
   const sets = w.exercises.flatMap((e) => e.sets).filter((s) => s.completed && s.type !== "warmup").length;
   const volume = workoutVolumeKg(w, exercises);
+  // Compact so the tile never wraps on a phone: "45 min" or "1:10 h".
+  const minutes = Math.round(workoutDurationS(w) / 60);
+  const durationValue = minutes < 60 ? String(minutes) : `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
+  const durationUnit = minutes < 60 ? "min" : "h";
+
+  // Right after saving: celebrate records and achievements this workout earned.
+  const celebrate: CelebrationItem[] = justSaved
+    ? [
+        ...workoutPRs(w, all, exercises).map((pr) => ({ key: `pr-${pr.exercise.id}`, kind: "pr" as const, title: `${pr.exercise.name}: new record`, detail: `${pr.label}: ${formatSet(pr.set, pr.exercise.kind, unit)}` })),
+        ...achievements(all, exercises, profile.weeklyGoal, tz, unit)
+          .filter((a) => a.unlockedBy === w.id)
+          .map((a) => ({ key: a.id, kind: a.kind, title: a.title, detail: a.description })),
+      ]
+    : [];
 
   return (
     <>
@@ -71,7 +97,7 @@ async function Detail({ id }: { id: string }) {
         back={{ href: "/history", label: "History" }}
       />
       <div className="mb-8 grid grid-cols-3 gap-3">
-        <StatTile label="Duration" value={formatLongDuration(workoutDurationS(w))} />
+        <StatTile label="Duration" value={durationValue} unit={durationUnit} />
         <StatTile label="Volume" value={volume ? formatCompact(toDisplayWeight(volume, unit)) : "–"} unit={volume ? unit : undefined} />
         <StatTile label="Sets" value={String(sets)} />
       </div>
@@ -119,7 +145,10 @@ async function Detail({ id }: { id: string }) {
         );
       })}
 
+      <Celebration items={celebrate} />
+
       <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+        <ShareWorkout workoutId={w.id} fileName={`workout-${localYmd(w.startedAt, tz)}`} />
         <ConfirmAction
           className="flex-1"
           buttonVariant="tinted"

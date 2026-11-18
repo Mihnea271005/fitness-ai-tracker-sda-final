@@ -21,12 +21,13 @@ function num(form: FormData, key: string): number | null | "invalid" {
   return Number.isFinite(v) ? v : "invalid";
 }
 
-/** "25:00", "1:05:30", "90" (seconds) → seconds. */
-function duration(form: FormData, key: string): number | null | "invalid" {
+/** "25:00", "1:05:30" → seconds. A bare number is seconds for holds ("90"), minutes for cardio ("55"). */
+function duration(form: FormData, key: string, bare: "s" | "min" = "s"): number | null | "invalid" {
   const raw = String(form.get(key) ?? "").trim();
   if (!raw) return null;
   if (!/^\d+(:\d{1,2}){0,2}$/.test(raw)) return "invalid";
   const parts = raw.split(":").map(Number);
+  if (parts.length === 1 && bare === "min") return parts[0] * 60;
   if (parts.slice(1).some((p) => p >= 60)) return "invalid";
   return parts.reduce((total, p) => total * 60 + p, 0);
 }
@@ -50,7 +51,8 @@ export async function saveGoal(_prev: GoalFormState, form: FormData): Promise<Go
         if (w === null || w === "invalid" || w <= 0) return { error: "Enter the weight you're aiming for." };
         if (reps === "invalid" || !Number.isInteger(reps) || reps < 1 || reps > 100) return { error: "Reps must be a whole number from 1 to 100." };
         const kg = fromDisplayWeight(w, user.unit);
-        if (kg < 1 || kg > setLimits(exercise).weightKg) return { error: "That weight is beyond what's possible for this exercise. Check the number and unit." };
+        if (kg < 1) return { error: "That weight is too low for a goal. Aim for at least 1 kg (about 2.2 lb)." };
+        if (kg > setLimits(exercise).weightKg) return { error: "That weight is beyond what's possible for this exercise. Check the number and unit." };
         row.target_weight_kg = draft.targetWeightKg = kg;
         row.target_reps = draft.targetReps = reps;
         break;
@@ -69,7 +71,7 @@ export async function saveGoal(_prev: GoalFormState, form: FormData): Promise<Go
       }
       case "cardio": {
         const km = num(form, "distance");
-        const s = duration(form, "time");
+        const s = duration(form, "time", "min");
         if (km === null || km === "invalid" || km < 0.1 || km > 1000) return { error: "Enter a distance between 0.1 and 1000 km." };
         if (s === null || s === "invalid" || s < 1 || s > 86_400) return { error: "Enter the time as mm:ss or h:mm:ss, e.g. 25:00." };
         row.target_distance_m = draft.targetDistanceM = Math.round(km * 1000);

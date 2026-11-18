@@ -81,7 +81,8 @@ export function PageHeader({
           collapsed ? "glass !shadow-none hairline-b" : "bg-transparent",
         )}
       >
-        <div className="grid h-13 grid-cols-[1fr_auto_1fr] items-center gap-2">
+        {/* Side columns keep at least their content (the back link); the compact title takes what's left and truncates. */}
+        <div className="grid h-13 grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] items-center gap-2">
           <div className="flex min-w-0 items-center">
             {back && (
               <Link

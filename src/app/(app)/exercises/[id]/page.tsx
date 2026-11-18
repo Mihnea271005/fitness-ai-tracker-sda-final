@@ -16,6 +16,13 @@ import { coachProfile, trainingSettings } from "@/lib/ai/coach";
 import { estimateExercise } from "@/lib/ai/estimator";
 import { suggestStart, targetFor } from "@/lib/ai/prescribe";
 import { getMeasurements } from "@/lib/data";
+import type { Metadata } from "next";
+
+// Page title = the exercise's name (streams with the per-request page, Next 16 + Cache Components).
+export async function generateMetadata({ params }: PageProps<"/exercises/[id]">): Promise<Metadata> {
+  const ex = (await getExerciseMap()).get((await params).id);
+  return { title: ex?.name ?? "Exercise" };
+}
 
 export default function ExerciseDetailPage({ params }: PageProps<"/exercises/[id]">) {
   return (

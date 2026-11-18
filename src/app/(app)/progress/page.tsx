@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { ChevronRight, Scale, Trophy } from "lucide-react";
+import { Award, ChevronRight, Scale, Trophy } from "lucide-react";
+import { achievements } from "@/lib/achievements";
 import { PageHeader } from "@/components/ui/interactive";
 import { ListRow, ListSection, StatTile } from "@/components/ui/primitives";
 import { ExerciseIcon } from "@/components/exercise-icon";
@@ -8,9 +9,10 @@ import { VolumeChart } from "@/components/volume-chart";
 import { getCurrentUser } from "@/lib/auth";
 import { GoalForm } from "@/components/goal-form";
 import { GoalRow } from "@/components/goal-row";
+import { ScrollToHash } from "@/components/scroll-to-hash";
 import { goalStatuses } from "@/lib/ai/goals";
 import { getExerciseMap, getGoals, getMeasurements, getTimeZone, getWorkouts } from "@/lib/data";
-import { formatCompact, formatDate, formatDay, formatSet, formatWeight, localYmd, toDisplayWeight } from "@/lib/format";
+import { formatCompact, formatDate, formatDay, formatDistance, formatDuration, formatSet, formatWeight, localYmd, toDisplayWeight } from "@/lib/format";
 import { personalRecords, weekStreak, weeklySummaries } from "@/lib/stats";
 
 export const metadata = { title: "Progress" };
@@ -27,11 +29,14 @@ async function Progress() {
   const [profile, workouts, exercises, measurements, goals, tz] = await Promise.all([getCurrentUser(), getWorkouts(), getExerciseMap(), getMeasurements(), getGoals(), getTimeZone()]);
   const unit = profile.unit;
   const goalList = goalStatuses(goals, exercises, workouts, measurements, unit);
+  const badges = achievements(workouts, exercises, profile.weeklyGoal, tz, unit);
+  const latestBadge = badges.find((a) => a.unlockedAt);
   const weeks = weeklySummaries(workouts, exercises, new Date(), tz, 12);
   const total = weeks.reduce((a, w) => a + w.workouts, 0);
   const volume = weeks.reduce((a, w) => a + w.volumeKg, 0);
   const prs = personalRecords(workouts, exercises);
   const latestWeight = measurements.find((m) => m.weightKg !== undefined);
+  const thisYear = localYmd(new Date(), tz).slice(0, 4);
 
   return (
     <>
@@ -55,6 +60,19 @@ async function Progress() {
         <ChevronRight className="size-4 text-label-3" strokeWidth={2.5} aria-hidden />
       </Link>
 
+      <Link href="/achievements" className="mb-6 flex min-h-11 items-center gap-3 rounded-[var(--radius-cell)] bg-surface p-4 transition-colors hover:bg-fill-3">
+        <span className="inline-flex size-9 items-center justify-center rounded-[9px] bg-orange text-white">
+          <Award className="size-5" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-headline font-semibold">Achievements</span>
+          <span className="block truncate text-subhead text-label-2">
+            {badges.filter((a) => a.unlockedAt).length} of {badges.length} unlocked{latestBadge ? ` · latest: ${latestBadge.title}` : ""}
+          </span>
+        </span>
+        <ChevronRight className="size-4 text-label-3" strokeWidth={2.5} aria-hidden />
+      </Link>
+
       {total > 0 && (
         <VolumeChart
           unit={unit}
@@ -63,6 +81,7 @@ async function Progress() {
       )}
 
       <section id="goals" className="scroll-mt-20">
+        <ScrollToHash id="goals" />
         <GoalForm exercises={[...exercises.values()].filter((e) => !e.archived)} unit={unit} today={localYmd(new Date(), tz)} />
         <ListSection
           header="Goals"
@@ -86,11 +105,15 @@ async function Progress() {
             href={`/exercises/${pr.exercise.id}`}
             leading={<ExerciseIcon kind={pr.exercise.kind} />}
             title={pr.exercise.name}
-            subtitle={`${pr.label} · ${formatDate(pr.date, tz, { day: "numeric", month: "short", year: "numeric" })}`}
+            // Short date (year only when it isn't this year) so the label fits on a phone.
+            subtitle={`${pr.label} · ${formatDate(pr.date, tz, { day: "numeric", month: "short", ...(pr.date.slice(0, 4) === thisYear ? {} : { year: "numeric" }) })}`}
             trailing={
               <span className="inline-flex items-center gap-1.5 font-rounded font-semibold text-label">
                 <Trophy className="size-4 text-yellow" aria-hidden />
-                {formatSet(pr.set, pr.exercise.kind, unit)}
+                {/* Cardio: distance and time only; the pace is on the exercise page. Keeps the name readable on phones. */}
+                {pr.exercise.kind === "cardio" && pr.set.distanceM
+                  ? `${formatDistance(pr.set.distanceM)} · ${formatDuration(pr.set.durationS ?? 0)}`
+                  : formatSet(pr.set, pr.exercise.kind, unit)}
               </span>
             }
           />

@@ -99,7 +99,8 @@ export function ListRow({ href, onClick, leading, title, subtitle, trailing, che
         <div className={cn("truncate text-body", destructive ? "text-red-text" : "text-label")}>{title}</div>
         {subtitle && <div className="truncate text-subhead text-label-2">{subtitle}</div>}
       </div>
-      {trailing && <div className="shrink-0 text-body text-label-2 tabular">{trailing}</div>}
+      {/* Long values (cardio: "6.50 km · 34:27 · 5:18 /km") wrap instead of squeezing the title to "R…". */}
+      {trailing && <div className="max-w-[45%] shrink-0 text-right text-body text-label-2 tabular">{trailing}</div>}
       {(chevron ?? !!href) && <ChevronRight aria-hidden className="size-4 shrink-0 text-label-3" strokeWidth={2.5} />}
     </div>
   );
@@ -135,9 +136,10 @@ export function StatTile({ label, value, unit, delta, icon }: { label: string; v
         {icon}
         {label}
       </div>
-      <div className="font-rounded text-title1 font-bold">
-        {value}
-        {unit && <span className="ml-1 text-title3 font-semibold text-label-2">{unit}</span>}
+      {/* Wraps the unit under the value rather than clipping in narrow (3-up, phone) tiles. */}
+      <div className="flex min-w-0 flex-wrap items-baseline gap-x-1 font-rounded text-title2 font-bold sm:text-title1">
+        <span className="min-w-0 break-words">{value}</span>
+        {unit && <span className="text-title3 font-semibold text-label-2">{unit}</span>}
       </div>
       {delta && <div className="text-footnote text-label-2">{delta}</div>}
     </Card>
@@ -160,7 +162,8 @@ export function TextField({ label, className, id, ...props }: ComponentProps<"in
       <span className="mb-1.5 block px-1 text-subhead font-medium text-label-2">{label}</span>
       <input
         id={inputId}
-        className="min-h-11 w-full rounded-xl bg-surface px-4 py-3 text-body text-label placeholder:text-label-3 outline-none ring-accent focus-visible:ring-2"
+        // In a sheet (<dialog>, elevated white) a surface-white field would be invisible: use a fill there.
+        className="min-h-11 w-full rounded-xl bg-surface px-4 py-3 text-body text-label placeholder:text-label-3 outline-none ring-accent focus-visible:ring-2 [dialog_&]:bg-fill-3"
         {...props}
       />
     </label>

@@ -52,6 +52,8 @@ export async function saveTrainingProfile(_prev: OnboardingState, form: FormData
       height_cm: height,
       experience: pick(form.get("experience"), ["new", "under_1", "1_to_3", "over_3"] as const),
       days_per_week: days !== null ? Math.min(Math.max(days, 1), 7) : null,
+      // The weekly workout goal on Home follows the training days they just chose.
+      ...(days !== null ? { weekly_goal: Math.min(Math.max(days, 1), 7) } : {}),
       session_minutes: minutes !== null ? Math.min(Math.max(minutes, 15), 180) : null,
       goal: pick(form.get("goal"), ["strength", "muscle", "general", "endurance", "fat_loss"] as const),
       focus,

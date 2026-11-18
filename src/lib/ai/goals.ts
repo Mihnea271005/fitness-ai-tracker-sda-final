@@ -254,7 +254,7 @@ export function describeGoal(goal: PersonalGoal, exercise: Exercise | undefined,
 const goalDistance = (m: number) => (m >= 1000 ? `${+(m / 1000).toFixed(2)} km` : formatDistance(m));
 
 function metricLabel(goal: PersonalGoal, exercise?: Exercise): string {
-  if (goal.kind === "body_weight") return "Body weight";
+  if (goal.kind === "body_weight") return "Now"; // the title already says "Body weight"
   switch (exercise?.kind) {
     case "strength":
       return "Est. max";

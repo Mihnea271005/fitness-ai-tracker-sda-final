@@ -71,7 +71,7 @@ export function GoalForm({ exercises, unit, today }: { exercises: Exercise[]; un
                   value={exerciseId}
                   onChange={(e) => setExerciseId(e.target.value)}
                   required
-                  className="min-h-11 w-full appearance-none rounded-xl bg-surface px-4 py-3 text-body text-label outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="min-h-11 w-full appearance-none rounded-xl bg-fill-3 px-4 py-3 text-body text-label outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 >
                   <option value="" disabled>
                     Choose…

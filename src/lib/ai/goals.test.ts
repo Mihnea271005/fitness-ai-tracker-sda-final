@@ -168,6 +168,20 @@ describe("goals in generated workouts", () => {
     expect(gen({}).exercises.some((p) => CATALOG[p.exercise.slug!].pattern === "cardio")).toBe(false);
   });
 
+  it("goal additions stay within the session length", () => {
+    const base = gen({});
+    const withGoals = gen({ goalExerciseIds: [byslug("calf-raise").id, running.id] });
+    expect(ids(withGoals)).toContain("calf-raise");
+    expect(ids(withGoals)).toContain("running");
+    expect(withGoals.exercises.length).toBe(base.exercises.length); // they replace, not add
+    expect(ids(withGoals)[0]).toBe(ids(base)[0]); // the main lift stays
+  });
+
+  it("pull days don't repeat the legs-day hinge (6-day push/pull/legs)", () => {
+    const pull = generateWorkout("pull", { ...SETTINGS, daysPerWeek: 6, sessionMinutes: 90 }, MAN, LIBRARY, [], "kg", "2026-11-18");
+    expect(pull.exercises.some((p) => CATALOG[p.exercise.slug!].pattern === "hinge")).toBe(false);
+  });
+
   it("never forces a goal exercise the location can't do", () => {
     expect(ids(gen({ equipment: "bodyweight", goalExerciseIds: [bench.id] }))).not.toContain("bench-press");
   });

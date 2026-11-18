@@ -19,8 +19,15 @@ export function ExercisePicker({ open, onClose, onPick, exercises }: { open: boo
     .filter((e) => !e.archived && (kind === "all" || e.kind === kind) && e.name.toLowerCase().includes(q.trim().toLowerCase()))
     .sort((a, b) => Number(!a.ownerId) - Number(!b.ownerId) || a.name.localeCompare(b.name)); // own exercises first
 
+  // Start fresh each time: a leftover "Plank" search would hide everything next time.
+  function close() {
+    setQ("");
+    setKind("all");
+    onClose();
+  }
+
   return (
-    <Sheet open={open} onClose={onClose} title="Add exercise">
+    <Sheet open={open} onClose={close} title="Add exercise">
       <label className="mb-3 flex min-h-11 items-center gap-2 rounded-xl bg-fill-3 px-3">
         <Search className="size-4 text-label-2" aria-hidden />
         <span className="sr-only">Search exercises</span>
@@ -52,7 +59,7 @@ export function ExercisePicker({ open, onClose, onPick, exercises }: { open: boo
             trailing={<Plus className="size-5 text-accent" aria-hidden />}
             onClick={() => {
               onPick(e);
-              onClose();
+              close();
             }}
           />
         ))}

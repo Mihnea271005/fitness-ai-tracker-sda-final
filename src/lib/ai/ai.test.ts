@@ -205,6 +205,23 @@ describe("prescriptions", () => {
     expect(roundLoad(fromDisplayWeight(185, "lb"), 2.5, "lb") / 0.45359237).toBeCloseTo(185, 1);
   });
 
+  it("one-set sessions read naturally, and a 0 increment still steps up", () => {
+    const est = estimateExercise(bench, [workout(3, bench.id, [set(80, 8)])], MAN, NOW)!;
+    const s = suggestStart(bench, est, { ...t, reps: 8 }, "kg")!;
+    expect(s.reason).toContain("80 kg × 8 on your set last time");
+    const noStep = { ...bench, weightIncrementKg: 0 };
+    expect(suggestStart(noStep, estimateExercise(noStep, [workout(3, bench.id, [set(80, 8), set(80, 8)])], MAN, NOW)!, { ...t, reps: 8 }, "kg")!.values.weightKg).toBe(82.5);
+    expect(adjustNext(noStep, { weightKg: 80, reps: 11 }, { ...t, reps: 8 }, "kg")!.values.weightKg).toBe(82.5);
+  });
+
+  it("cardio starting pace depends on the machine: cycling is faster per km, jump rope has none", () => {
+    const run = priorEstimate(byslug("running"), MAN)!;
+    const bike = priorEstimate(byslug("cycling"), MAN)!;
+    expect(bike).toBeLessThan(run * 0.5); // ≥ 2× the speed
+    expect(3600 / bike).toBeGreaterThan(20); // > 20 km/h
+    expect(priorEstimate(byslug("jump-rope"), MAN)).toBeUndefined();
+  });
+
   it("first session from the profile is deliberately light", () => {
     const est = estimateExercise(bench, [], MAN, NOW)!;
     const s = suggestStart(bench, est, { ...t, reps: 8 }, "kg")!;

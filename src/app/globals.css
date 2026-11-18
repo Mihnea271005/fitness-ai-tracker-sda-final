@@ -252,3 +252,25 @@ input[type="number"] {
 .animate-fade {
   animation: fade-in 0.2s ease-out;
 }
+
+/* Celebration confetti: a short burst, only when the user hasn't asked for reduced motion. */
+@keyframes confetti-fall {
+  0% {
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(var(--drift), 105vh, 0) rotate(var(--spin));
+    opacity: 0.9;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .confetti-piece {
+    animation: confetti-fall var(--dur) cubic-bezier(0.25, 0.6, 0.4, 1) var(--delay) forwards;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece {
+    display: none;
+  }
+}

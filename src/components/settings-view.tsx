@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Download, LogOut, Moon, Ruler, Sparkles, Target, Timer, Trash2 } from "lucide-react";
+import { useState, useSyncExternalStore, useTransition } from "react";
+import { Bell, CalendarPlus, Download, LogOut, Moon, Ruler, Sparkles, Target, Timer, Trash2 } from "lucide-react";
 import { Button, ListRow, ListSection, TextField } from "./ui/primitives";
 import { SegmentedControl, Sheet, Toggle } from "./ui/interactive";
 import { deleteAccount, updateProfile, type ProfilePatch } from "@/app/(app)/settings/actions";
 import { signOut } from "@/app/(auth)/actions";
 import { deleteAllWorkouts } from "@/app/(app)/workout/actions";
+import { REST_TIMER_PREF, useBooleanPref } from "@/lib/prefs";
 import type { Profile, Unit } from "@/lib/types";
 
 function RowIcon({ bg, children }: { bg: string; children: React.ReactNode }) {
@@ -17,13 +18,21 @@ export function SettingsView({ profile }: { profile: Profile }) {
   const [name, setName] = useState(profile.displayName);
   const [unit, setUnit] = useState<Unit>(profile.unit);
   const [goal, setGoal] = useState(profile.weeklyGoal);
-  const [restTimer, setRestTimer] = useState(true);
+  const [restTimer, setRestTimer] = useBooleanPref(REST_TIMER_PREF, true); // per device
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [editingName, setEditingName] = useState(false);
   const [draftName, setDraftName] = useState(profile.displayName);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmWipe, setConfirmWipe] = useState(false);
+  const [reminderTime, setReminderTime] = useState("18:00");
+  const [remindBefore, setRemindBefore] = useState("30");
+  // The browser's own time zone, for the calendar file (server render: none, added after hydration).
+  const browserTz = useSyncExternalStore(
+    () => () => {},
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone ?? "",
+    () => "",
+  );
 
   /** Optimistic: update the UI now, save in the background, roll back on failure. */
   function save(patch: ProfilePatch, rollback: () => void) {
@@ -166,6 +175,60 @@ export function SettingsView({ profile }: { profile: Profile }) {
           title="Light & dark mode"
           trailing="Automatic"
         />
+      </ListSection>
+
+      <ListSection
+        header="Reminders"
+        footer={`Adds your ${profile.daysPerWeek ?? 3} training days a week to your phone's calendar as repeating events, and the calendar reminds you. Changed your plan? Download it again and it updates the same events.`}
+      >
+        <li>
+          <div className="flex min-h-11 items-center gap-3 py-2 pr-4">
+          <RowIcon bg="bg-indigo">
+            <Bell className="size-4" aria-hidden />
+          </RowIcon>
+          <label htmlFor="reminder-time" className="flex-1 text-body">
+            Workout time
+          </label>
+          <input
+            id="reminder-time"
+            type="time"
+            value={reminderTime}
+            onChange={(e) => setReminderTime(e.target.value || "18:00")}
+            className="min-h-11 rounded-lg bg-fill-3 px-3 text-body tabular text-label outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          />
+          </div>
+        </li>
+        <li>
+          <div className="flex min-h-11 items-center gap-3 py-2 pr-4">
+          <span className="size-7" aria-hidden />
+          <label htmlFor="remind-before" className="flex-1 text-body">
+            Remind me
+          </label>
+          <select
+            id="remind-before"
+            value={remindBefore}
+            onChange={(e) => setRemindBefore(e.target.value)}
+            className="min-h-11 rounded-lg bg-fill-3 px-3 text-body text-label outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <option value="0">At the start</option>
+            <option value="15">15 min before</option>
+            <option value="30">30 min before</option>
+            <option value="60">1 hour before</option>
+            <option value="120">2 hours before</option>
+          </select>
+          </div>
+        </li>
+        <li>
+          <a
+            href={`/export/calendar.ics?time=${encodeURIComponent(reminderTime)}&remind=${remindBefore}${browserTz ? `&tz=${encodeURIComponent(browserTz)}` : ""}`}
+            download
+            className="-ml-4 flex min-h-11 items-center gap-3 py-2.5 pr-4 pl-4 text-body text-accent transition-colors hover:bg-fill-3 active:bg-fill-2"
+          >
+            <span className="size-7" aria-hidden />
+            <CalendarPlus className="size-5" aria-hidden />
+            <span className="flex-1">Add to calendar</span>
+          </a>
+        </li>
       </ListSection>
 
       <ListSection header="Your data" footer="The export opens in Excel, Numbers or Google Sheets: one row per set.">

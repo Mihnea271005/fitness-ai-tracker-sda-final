@@ -16,6 +16,7 @@ import { estimateExercise, type CoachProfile } from "@/lib/ai/estimator";
 import type { TrainingSettings } from "@/lib/ai/generator";
 import { adjustNext, suggestStart, targetFor, type Suggestion, type Target } from "@/lib/ai/prescribe";
 import { checkSet, unusualSet } from "@/lib/limits";
+import { REST_TIMER_PREF, useBooleanPref } from "@/lib/prefs";
 import type { Exercise, ExerciseKind, Routine, Unit, Workout, WorkoutSet } from "@/lib/types";
 
 /** Working sets from the most recent session with this exercise (for the "Previous" column). */
@@ -97,6 +98,57 @@ function fieldsFor(kind: ExerciseKind, unit: Unit): [FieldDef, FieldDef] {
   }
 }
 
+/**
+ * One number field in a set row. While focused it keeps the text exactly as typed, so a
+ * half-typed decimal ("82," / "82.") isn't re-rendered from the parsed number (which would
+ * drop the separator and turn "82,5" into "825"). Outside editing it shows the stored value,
+ * so external changes (ticking fills the suggestion, the unit changes) still appear.
+ */
+function SetInput({
+  field,
+  value,
+  placeholder,
+  label,
+  invalid,
+  describedBy,
+  done,
+  onValue,
+}: {
+  field: FieldDef;
+  value: number | undefined;
+  placeholder?: number;
+  label: string;
+  invalid: boolean;
+  describedBy?: string;
+  done: boolean;
+  onValue: (v: number | undefined) => void;
+}) {
+  const [text, setText] = useState<string | null>(null); // null = not editing
+  return (
+    <input
+      aria-label={label}
+      inputMode={field.decimal ? "decimal" : "numeric"}
+      type="text"
+      value={text ?? field.toInput(value)}
+      placeholder={field.toInput(placeholder) || "–"}
+      onFocus={() => setText(field.toInput(value))}
+      onChange={(e) => {
+        setText(e.target.value);
+        onValue(field.fromInput(e.target.value));
+      }}
+      onBlur={() => setText(null)}
+      aria-invalid={invalid}
+      aria-describedby={describedBy}
+      className={cn(
+        "h-11 w-full min-w-0 rounded-[10px] bg-fill-3 text-center font-rounded text-body font-semibold tabular outline-none",
+        "placeholder:font-medium placeholder:text-label-3 focus-visible:ring-2 focus-visible:ring-accent",
+        done && "bg-transparent",
+        invalid && "ring-2 ring-red",
+      )}
+    />
+  );
+}
+
 /** The numbers actually typed into a set (so the next row can suggest repeating them). */
 function enteredValues(s: DraftSet): Partial<WorkoutSet> {
   const out: Partial<WorkoutSet> = {};
@@ -137,6 +189,8 @@ function SetRow({
   // Impossible values block the tick; possible-but-unusual ones (825 kg for an 82.5 kg lifter) only ask.
   const problem = checkSet(exercise, set, unit);
   const unusual = problem ? null : unusualSet(exercise, set, pastSets, unit);
+  // Shown when ✓ is tapped on a row with nothing to save (no value typed, no suggestion to fill in).
+  const [missing, setMissing] = useState<string | null>(null);
 
   function toggleComplete() {
     if (set.completed) return onChange({ completed: false });
@@ -144,6 +198,14 @@ function SetRow({
     // Completing an empty row accepts the suggested (greyed) values — one tap.
     const patch: Partial<DraftSet> = { completed: true };
     for (const f of fields) if (set[f.key] === undefined && placeholder?.[f.key] !== undefined) patch[f.key] = placeholder[f.key];
+    // The save keeps only sets with a value for their kind, so don't let an empty row look done.
+    const next = { ...set, ...patch };
+    const hasValue = kind === "cardio" ? !!(next.durationS || next.distanceM) : kind === "timed" ? !!next.durationS : !!next.reps;
+    if (!hasValue) {
+      setMissing(kind === "cardio" ? "Enter a distance or time first." : kind === "timed" ? "Enter how long you held it first." : "Enter your reps first.");
+      return;
+    }
+    setMissing(null);
     onChange(patch);
   }
 
@@ -162,22 +224,16 @@ function SetRow({
       </button>
       <div className="truncate text-subhead text-label-2 tabular">{previous ? formatSet(previous, kind, unit) : "–"}</div>
       {fields.map((f) => (
-        <input
+        <SetInput
           key={f.key + f.label}
-          aria-label={`Set ${number} ${f.label}`}
-          inputMode={f.decimal ? "decimal" : "numeric"}
-          type="text"
-          value={f.toInput(set[f.key])}
-          placeholder={f.toInput(placeholder?.[f.key]) || "–"}
-          onChange={(e) => onChange({ [f.key]: f.fromInput(e.target.value) })}
-          aria-invalid={!!problem}
-          aria-describedby={problem || unusual ? `set-${set.id}-note` : undefined}
-          className={cn(
-            "h-11 w-full min-w-0 rounded-[10px] bg-fill-3 text-center font-rounded text-body font-semibold tabular outline-none",
-            "placeholder:font-medium placeholder:text-label-3 focus-visible:ring-2 focus-visible:ring-accent",
-            set.completed && "bg-transparent",
-            problem && "ring-2 ring-red",
-          )}
+          field={f}
+          value={set[f.key]}
+          placeholder={placeholder?.[f.key]}
+          label={`Set ${number} ${f.label}`}
+          invalid={!!problem}
+          describedBy={problem || unusual ? `set-${set.id}-note` : undefined}
+          done={set.completed}
+          onValue={(v) => onChange({ [f.key]: v })}
         />
       ))}
       <button
@@ -195,9 +251,9 @@ function SetRow({
         <Check className="size-5" strokeWidth={3} aria-hidden />
       </button>
     </div>
-    {(problem || unusual) && (
+    {(problem || unusual || (missing && !set.completed)) && (
       <p id={`set-${set.id}-note`} role={problem ? "alert" : "status"} className={cn("mb-1 pl-10 text-footnote sm:pl-12", problem ? "text-red-text" : "text-label-2")}>
-        {problem ?? unusual}
+        {problem ?? unusual ?? missing}
       </p>
     )}
     {showFeel && set.completed && kind !== "cardio" && (
@@ -437,6 +493,7 @@ export function WorkoutLogger({
   const [saving, startSaving] = useTransition();
   const elapsed = useElapsed(workout?.startedAt);
   const rest = useElapsed(workout?.lastCompletedAt);
+  const [showRest] = useBooleanPref(REST_TIMER_PREF, true);
   const exerciseMap = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
 
   if (!loaded) return <PageHeader title="Workout" />;
@@ -461,7 +518,7 @@ export function WorkoutLogger({
       }
       discard();
       setFinishing(false);
-      router.push(`/history/${res.id}`);
+      router.push(`/history/${res.id}?saved=1`); // ?saved=1: the summary celebrates new records
     });
   }
 
@@ -477,7 +534,7 @@ export function WorkoutLogger({
             <span>
               {done} of {allSets.length} sets done
             </span>
-            {workout.lastCompletedAt && <span className="tabular">Rest {formatDuration(rest)}</span>}
+            {showRest && workout.lastCompletedAt && <span className="tabular">Rest {formatDuration(rest)}</span>}
             <button
               type="button"
               onClick={() => {

@@ -11,20 +11,26 @@ import { KIND_LABEL } from "@/lib/format";
 import type { Exercise, Routine, RoutineExercise } from "@/lib/types";
 
 function NumberField({ label, value, onChange, min, max, suffix }: { label: string; value?: number; onChange: (v?: number) => void; min: number; max: number; suffix?: string }) {
+  // While typing, keep the raw text (it may be empty or out of range for a moment); clamp on
+  // blur. Clamping on every keystroke turned "clear, type 5" into "15".
+  const [text, setText] = useState<string | null>(null);
   return (
     <label className="flex flex-col gap-1">
       <span className="text-caption1 font-semibold tracking-wide text-label-2 uppercase">{label}</span>
       <span className="flex items-center gap-1">
         <input
           inputMode="numeric"
-          value={value ?? ""}
+          value={text ?? (value === undefined ? "" : String(value))}
           placeholder="–"
+          onFocus={() => setText(value === undefined ? "" : String(value))}
           onChange={(e) => {
+            setText(e.target.value);
             const t = e.target.value.trim();
             if (t === "") return onChange(undefined);
             const n = Math.round(Number(t));
             if (Number.isFinite(n)) onChange(Math.min(Math.max(n, min), max));
           }}
+          onBlur={() => setText(null)}
           className="h-11 w-full min-w-0 rounded-[10px] bg-fill-3 text-center font-rounded text-body font-semibold tabular outline-none placeholder:text-label-3 focus-visible:ring-2 focus-visible:ring-accent"
         />
         {suffix && <span className="text-subhead text-label-2">{suffix}</span>}

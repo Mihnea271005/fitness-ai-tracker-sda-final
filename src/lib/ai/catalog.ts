@@ -39,6 +39,8 @@ export interface CatalogEntry {
   seconds?: Record<Experience, number>;
   /** female reps/seconds relative to the male reference (bodyweight & timed) */
   femaleFactor?: number;
+  /** cardio: pace (s/km) relative to running; 0 = no meaningful distance (no starting guess) */
+  paceFactor?: number;
 }
 
 const R = (n: number, u: number, m: number, o: number): Record<Experience, number> => ({ new: n, under_1: u, "1_to_3": m, over_3: o });
@@ -94,9 +96,9 @@ export const CATALOG: Record<string, CatalogEntry> = {
 
   // ---- cardio
   running: { pattern: "cardio", needs: "bodyweight", compound: true },
-  cycling: { pattern: "cardio", needs: "gym", compound: true },
-  rowing: { pattern: "cardio", needs: "gym", compound: true },
-  "jump-rope": { pattern: "cardio", needs: "bodyweight", compound: true },
+  cycling: { pattern: "cardio", needs: "gym", compound: true, paceFactor: 0.4 }, // ~2.5× running speed
+  rowing: { pattern: "cardio", needs: "gym", compound: true, paceFactor: 0.75 }, // ~2:00/500 m for a 5:20/km runner
+  "jump-rope": { pattern: "cardio", needs: "bodyweight", compound: true, paceFactor: 0 },
 };
 
 const LEVEL_RANK: Record<EquipmentLevel, number> = { bodyweight: 0, dumbbells: 1, gym: 2 };
