@@ -22,6 +22,21 @@ async function siteOrigin() {
   return `${proto}://${host}`;
 }
 
+/**
+ * Supabase's firewall answers any auth request whose redirect URL points at a raw IP
+ * (e.g. http://100.x.y.z:3000 over Tailscale or LAN) with a 403 HTML page. Open the
+ * app by name instead (localhost, or a MagicDNS / LAN hostname).
+ */
+function isIpOrigin(origin: string) {
+  try {
+    const host = new URL(origin).hostname;
+    return /^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith("[");
+  } catch {
+    return false;
+  }
+}
+const IP_HINT = "Open the app by name (like localhost) instead of by IP address to use this.";
+
 /** Only allow same-site relative paths, so ?next= can't redirect off-site. */
 function safeNext(next: FormDataEntryValue | null) {
   const v = typeof next === "string" ? next : "";
@@ -41,6 +56,14 @@ function friendly(message: string): string {
   if (m.includes("password should be") || m.includes("weak password")) return "Choose a stronger password: at least 8 characters, mixing letters and numbers.";
   if (m.includes("rate limit") || m.includes("too many")) return "Too many attempts. Wait a minute and try again.";
   if (m.includes("provider is not enabled")) return "Google sign-in isn't switched on for this project yet.";
+  // Supabase's built-in email service only delivers to the project's team members, with a low hourly cap.
+  if (m.includes("not authorized") || m.includes("error sending") || m.includes("sending confirmation") || m.includes("sending recovery"))
+    return "We couldn't send an email to this address. Try Continue with Google instead.";
+  if (m.includes("signups not allowed") || m.includes("signup is disabled")) return "New sign-ups are turned off right now.";
+  if (m.includes("database error")) return "We couldn't create your account right now. Please try again in a moment.";
+  if (m.includes("not valid json")) return "The sign-in service didn't respond properly. Please try again in a moment.";
+  // Unknown: keep the screen generic, but leave the real reason in the server log.
+  console.error("[auth] Unhandled Supabase auth error:", message);
   return "Something went wrong. Please try again.";
 }
 
@@ -65,21 +88,30 @@ export async function signUp(_prev: AuthState, form: FormData): Promise<AuthStat
   if (password.length < 8) return { error: "Your password needs at least 8 characters.", values };
 
   const supabase = await createClient();
+  const origin = await siteOrigin();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { display_name: name }, emailRedirectTo: `${await siteOrigin()}/auth/callback?next=/onboarding` },
+    // On a raw-IP origin the redirect would get the request blocked (see isIpOrigin). Leaving
+    // it out falls back to the project's Site URL, and it's only used if confirmation emails are on.
+    options: { data: { display_name: name }, ...(isIpOrigin(origin) ? {} : { emailRedirectTo: `${origin}/auth/callback?next=/onboarding` }) },
   });
-  if (error) return { error: friendly(error.message), values };
+  if (error) {
+    console.error(`[auth] signUp failed (status ${error.status ?? "?"}, code ${error.code ?? "?"}): ${error.message}`);
+    return { error: friendly(error.message), values };
+  }
   if (data.session) redirect("/onboarding"); // email confirmation is turned off in Supabase
   return { message: `We sent a confirmation link to ${email}. Open it on this device to finish signing up.` };
 }
 
 export async function signInWithGoogle(form: FormData) {
+  const origin = await siteOrigin();
+  // Google has to send the user back to this address, which can't be a raw IP (see isIpOrigin).
+  if (isIpOrigin(origin)) redirect(`/login?error=${encodeURIComponent(IP_HINT)}`);
   const supabase = await createClient();
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
-    options: { redirectTo: `${await siteOrigin()}/auth/callback?next=${encodeURIComponent(safeNext(form.get("next")))}` },
+    options: { redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(safeNext(form.get("next")))}` },
   });
   if (error || !data.url) redirect(`/login?error=${encodeURIComponent(friendly(error?.message ?? ""))}`);
   redirect(data.url);
@@ -88,9 +120,12 @@ export async function signInWithGoogle(form: FormData) {
 export async function requestPasswordReset(_prev: AuthState, form: FormData): Promise<AuthState> {
   const email = str(form, "email");
   if (!EMAIL_RE.test(email)) return { error: "Enter a valid email address.", values: { email } };
+  const origin = await siteOrigin();
+  // The reset link must lead back to this address, which can't be a raw IP (see isIpOrigin).
+  if (isIpOrigin(origin)) return { error: IP_HINT, values: { email } };
   const supabase = await createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${await siteOrigin()}/auth/callback?next=/update-password`,
+    redirectTo: `${origin}/auth/callback?next=/update-password`,
   });
   // Same message whether or not the account exists, so the form can't be used to probe emails.
   if (error && /rate limit|too many/i.test(error.message)) return { error: friendly(error.message), values: { email } };
