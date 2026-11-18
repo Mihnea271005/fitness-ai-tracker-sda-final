@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { fromDisplayWeight } from "@/lib/format";
+import { checkBody } from "@/lib/limits";
 
 export interface MeasurementState {
   error?: string;
@@ -38,7 +39,8 @@ export async function saveMeasurement(_prev: MeasurementState, form: FormData): 
   const w = num(form, "weight");
   if (w === "invalid") return { error: "Weight must be a number." };
   row.weight_kg = w === null ? null : fromDisplayWeight(w, user.unit);
-  if (row.weight_kg !== null && ((row.weight_kg as number) < 20 || (row.weight_kg as number) > 400)) return { error: "That weight looks off. Check the number and unit." };
+  const bodyProblem = checkBody(row.weight_kg as number | null, user.heightCm, user.unit);
+  if (bodyProblem) return { error: bodyProblem };
 
   for (const [col, key, min, max] of FIELDS) {
     const v = num(form, key);

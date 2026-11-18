@@ -6,8 +6,11 @@ import { ListRow, ListSection, StatTile } from "@/components/ui/primitives";
 import { ExerciseIcon } from "@/components/exercise-icon";
 import { VolumeChart } from "@/components/volume-chart";
 import { getCurrentUser } from "@/lib/auth";
-import { getExerciseMap, getMeasurements, getTimeZone, getWorkouts } from "@/lib/data";
-import { formatCompact, formatDate, formatDay, formatSet, formatWeight, toDisplayWeight } from "@/lib/format";
+import { GoalForm } from "@/components/goal-form";
+import { GoalRow } from "@/components/goal-row";
+import { goalStatuses } from "@/lib/ai/goals";
+import { getExerciseMap, getGoals, getMeasurements, getTimeZone, getWorkouts } from "@/lib/data";
+import { formatCompact, formatDate, formatDay, formatSet, formatWeight, localYmd, toDisplayWeight } from "@/lib/format";
 import { personalRecords, weekStreak, weeklySummaries } from "@/lib/stats";
 
 export const metadata = { title: "Progress" };
@@ -21,8 +24,9 @@ export default function ProgressPage() {
 }
 
 async function Progress() {
-  const [profile, workouts, exercises, measurements, tz] = await Promise.all([getCurrentUser(), getWorkouts(), getExerciseMap(), getMeasurements(), getTimeZone()]);
+  const [profile, workouts, exercises, measurements, goals, tz] = await Promise.all([getCurrentUser(), getWorkouts(), getExerciseMap(), getMeasurements(), getGoals(), getTimeZone()]);
   const unit = profile.unit;
+  const goalList = goalStatuses(goals, exercises, workouts, measurements, unit);
   const weeks = weeklySummaries(workouts, exercises, new Date(), tz, 12);
   const total = weeks.reduce((a, w) => a + w.workouts, 0);
   const volume = weeks.reduce((a, w) => a + w.volumeKg, 0);
@@ -57,6 +61,23 @@ async function Progress() {
           points={weeks.map((w) => ({ label: formatDay(w.weekStart), value: Math.round(toDisplayWeight(w.volumeKg, unit)) }))}
         />
       )}
+
+      <section id="goals" className="scroll-mt-20">
+        <GoalForm exercises={[...exercises.values()].filter((e) => !e.archived)} unit={unit} today={localYmd(new Date(), tz)} />
+        <ListSection
+          header="Goals"
+          footer={
+            goalList.length
+              ? "Projections follow the trend of your last 8 weeks. The AI schedules goal exercises in your workouts whenever they fit the day."
+              : undefined
+          }
+        >
+          {goalList.map((g) => (
+            <GoalRow key={g.goal.id} status={g} unit={unit} tz={tz} />
+          ))}
+          {!goalList.length && <li className="py-6 pr-4 text-center text-subhead text-label-2">Set a goal, like a 100 kg bench or a 5 km under 25 minutes, and track how close you are.</li>}
+        </ListSection>
+      </section>
 
       <ListSection header="Personal records" footer={prs.length ? "Your best set for each exercise. Tap one to see its full history." : undefined}>
         {prs.map((pr) => (

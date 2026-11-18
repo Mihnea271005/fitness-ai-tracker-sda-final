@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getExerciseMap, getExercises, getWorkouts } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import { generateSampleWorkouts } from "@/lib/sample-data";
+import { checkSet } from "@/lib/limits";
 import type { ExerciseKind, SetType } from "@/lib/types";
 
 export interface DraftSetInput {
@@ -51,7 +52,7 @@ function cleanSet(s: DraftSetInput, kind: ExerciseKind) {
 
 /** Saves a finished workout (completed sets only) in one transaction. */
 export async function saveWorkout(draft: DraftWorkoutInput): Promise<{ id?: string; error?: string }> {
-  await getCurrentUser();
+  const user = await getCurrentUser();
   const exercises = await getExerciseMap();
 
   const now = Date.now();
@@ -63,7 +64,14 @@ export async function saveWorkout(draft: DraftWorkoutInput): Promise<{ id?: stri
   for (const e of Array.isArray(draft?.exercises) ? draft.exercises.slice(0, 50) : []) {
     const ex = exercises.get(e?.exerciseId);
     if (!ex) continue; // unknown or not visible to this user
-    const sets = (Array.isArray(e.sets) ? e.sets.slice(0, 50) : []).map((s) => cleanSet(s, ex.kind)).filter(Boolean);
+    const raw = Array.isArray(e.sets) ? e.sets.slice(0, 50) : [];
+    // Impossible values are refused, not silently dropped: the logger blocks them too, so
+    // reaching here means a bypassed form, and the user should know what wasn't saved.
+    for (const [i, s] of raw.entries()) {
+      const problem = s?.completed === true ? checkSet(ex, s, user.unit) : null;
+      if (problem) return { error: `${ex.name}, set ${i + 1}: ${problem}` };
+    }
+    const sets = raw.map((s) => cleanSet(s, ex.kind)).filter(Boolean);
     if (sets.length) payloadExercises.push({ exercise_id: ex.id, sets });
   }
   if (!payloadExercises.length) return { error: "Complete at least one set (tap ✓) before finishing." };

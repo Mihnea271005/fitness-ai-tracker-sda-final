@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getExerciseMap, getTimeZone } from "@/lib/data";
 import { fromDisplayWeight, localYmd } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
+import { checkBody } from "@/lib/limits";
 
 export interface OnboardingState {
   error?: string;
@@ -24,10 +25,10 @@ export async function saveTrainingProfile(_prev: OnboardingState, form: FormData
   const thisYear = new Date().getUTCFullYear();
   if (birthYear !== null && (birthYear < thisYear - 100 || birthYear > thisYear - 13)) return { error: "Check your year of birth (you need to be at least 13)." };
   const height = int(form.get("height"));
-  if (height !== null && (height < 100 || height > 250)) return { error: "Height should be in centimetres, between 100 and 250." };
   const weightRaw = String(form.get("weight") ?? "").trim().replace(",", ".");
   const weightKg = weightRaw ? fromDisplayWeight(Number(weightRaw), user.unit) : null;
-  if (weightKg !== null && !(weightKg >= 20 && weightKg <= 400)) return { error: "That body weight looks off. Check the number and unit." };
+  const bodyProblem = checkBody(weightKg, height, user.unit);
+  if (bodyProblem) return { error: bodyProblem };
   const days = int(form.get("days"));
   const minutes = int(form.get("minutes"));
 

@@ -108,6 +108,25 @@ export interface BodyMeasurement {
   notes?: string;
 }
 
+/**
+ * A personal goal. Targets depend on what's measured:
+ * strength → weightKg × reps; bodyweight → reps; timed → seconds;
+ * cardio → distanceM within seconds; body weight → weightKg.
+ */
+export interface PersonalGoal {
+  id: string;
+  kind: "exercise" | "body_weight";
+  exerciseId?: string;
+  targetWeightKg?: number;
+  targetReps?: number;
+  targetSeconds?: number;
+  targetDistanceM?: number;
+  /** the progress metric when the goal was set */
+  baseline?: number;
+  deadline?: string; // YYYY-MM-DD
+  createdAt: string; // ISO
+}
+
 export type Unit = "kg" | "lb";
 
 export type Sex = "male" | "female" | "unspecified";

@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState, useState, type ReactNode } from "react";
+import { useActionState, useRef, useState, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { Check } from "lucide-react";
 import { Button, TextField, cn } from "./ui/primitives";
 import { saveTrainingProfile, type OnboardingState } from "@/app/(app)/onboarding/actions";
+import { fromDisplayWeight } from "@/lib/format";
+import { checkBody } from "@/lib/limits";
 import type { EquipmentAccess, Exercise, Experience, FocusArea, Goal, PlanMode, Profile, Sex } from "@/lib/types";
 
 /* ------------------------------------------------------------------ choice controls */
@@ -106,6 +108,8 @@ const EQUIPMENT_NEEDS: Record<EquipmentAccess, string[]> = {
 export function OnboardingForm({ profile, exercises, bodyweight, editing }: { profile: Profile; exercises: Exercise[]; bodyweight?: number; editing: boolean }) {
   const [state, action] = useActionState<OnboardingState, FormData>(saveTrainingProfile, {});
   const [step, setStep] = useState(0);
+  const [stepError, setStepError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const [sex, setSex] = useState<Sex>(profile.sex);
   const [experience, setExperience] = useState<Experience | undefined>(profile.experience);
   const [goal, setGoal] = useState<Goal | undefined>(profile.goal);
@@ -120,8 +124,28 @@ export function OnboardingForm({ profile, exercises, bodyweight, editing }: { pr
   const avoidable = exercises.filter((e) => !e.archived && e.kind !== "cardio" && EQUIPMENT_NEEDS[best].includes(e.equipment));
   const steps = ["About you", "Your training", "Your plan"];
 
+  /** Same checks as the server, but while the fields are still on screen. */
+  function aboutYouProblem(): string | null {
+    const form = formRef.current;
+    if (!form) return null;
+    const val = (name: string) => String(new FormData(form).get(name) ?? "").trim().replace(",", ".");
+    const nums = (name: string) => (val(name) === "" ? null : Number(val(name)));
+    const year = nums("birthYear");
+    const thisYear = new Date().getFullYear();
+    if (year !== null && (!Number.isInteger(year) || year < thisYear - 100 || year > thisYear - 13)) return "Check your year of birth (you need to be at least 13).";
+    const height = nums("height");
+    const weight = nums("weight");
+    if ((height !== null && Number.isNaN(height)) || (weight !== null && Number.isNaN(weight))) return "Height and weight must be numbers.";
+    return checkBody(weight === null ? null : fromDisplayWeight(weight, profile.unit), height, profile.unit);
+  }
+  function next() {
+    const problem = step === 0 ? aboutYouProblem() : null;
+    setStepError(problem);
+    if (!problem) setStep((s) => s + 1);
+  }
+
   return (
-    <form action={action} className="flex flex-col gap-6" noValidate>
+    <form ref={formRef} action={action} className="flex flex-col gap-6" noValidate>
       <ol className="flex gap-2" aria-label="Progress">
         {steps.map((s, i) => (
           <li key={s} className="flex-1" aria-current={i === step ? "step" : undefined}>
@@ -131,9 +155,9 @@ export function OnboardingForm({ profile, exercises, bodyweight, editing }: { pr
         ))}
       </ol>
 
-      {state.error && (
+      {(stepError ?? state.error) && (
         <p role="alert" className="rounded-xl bg-red/15 px-4 py-3 text-subhead text-red-text">
-          {state.error}
+          {stepError ?? state.error}
         </p>
       )}
 
@@ -272,7 +296,7 @@ export function OnboardingForm({ profile, exercises, bodyweight, editing }: { pr
           </Button>
         )}
         {step < 2 ? (
-          <Button className="flex-1" onClick={() => setStep((s) => s + 1)}>
+          <Button className="flex-1" onClick={next}>
             Continue
           </Button>
         ) : (

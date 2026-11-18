@@ -15,6 +15,7 @@ import { CATALOG } from "@/lib/ai/catalog";
 import { estimateExercise, type CoachProfile } from "@/lib/ai/estimator";
 import type { TrainingSettings } from "@/lib/ai/generator";
 import { adjustNext, suggestStart, targetFor, type Suggestion, type Target } from "@/lib/ai/prescribe";
+import { checkSet, unusualSet } from "@/lib/limits";
 import type { Exercise, ExerciseKind, Routine, Unit, Workout, WorkoutSet } from "@/lib/types";
 
 /** Working sets from the most recent session with this exercise (for the "Previous" column). */
@@ -25,6 +26,11 @@ function lastSessionSets(workouts: Workout[], exerciseId: string): WorkoutSet[] 
     if (working?.length) return working;
   }
   return [];
+}
+
+/** Every earlier working set of an exercise (for spotting typos against the user's best). */
+function allWorkingSets(workouts: Workout[], exerciseId: string): WorkoutSet[] {
+  return workouts.flatMap((w) => w.exercises.filter((e) => e.exerciseId === exerciseId).flatMap((e) => e.sets.filter((s) => s.completed && s.type !== "warmup")));
 }
 
 export interface CoachContext {
@@ -105,7 +111,8 @@ const GRID = "grid grid-cols-[2.25rem_minmax(0,1fr)_4.25rem_4.25rem_2.75rem] ite
 function SetRow({
   number,
   set,
-  kind,
+  exercise,
+  pastSets,
   unit,
   previous,
   placeholder,
@@ -115,7 +122,9 @@ function SetRow({
 }: {
   number: number;
   set: DraftSet;
-  kind: ExerciseKind;
+  exercise: Exercise;
+  /** earlier working sets of this exercise, for the typo check */
+  pastSets: WorkoutSet[];
   unit: Unit;
   previous?: WorkoutSet;
   placeholder?: Partial<WorkoutSet>;
@@ -123,10 +132,15 @@ function SetRow({
   onRemove: () => void;
   showFeel?: boolean;
 }) {
+  const kind = exercise.kind;
   const fields = fieldsFor(kind, unit);
+  // Impossible values block the tick; possible-but-unusual ones (825 kg for an 82.5 kg lifter) only ask.
+  const problem = checkSet(exercise, set, unit);
+  const unusual = problem ? null : unusualSet(exercise, set, pastSets, unit);
 
   function toggleComplete() {
     if (set.completed) return onChange({ completed: false });
+    if (problem) return;
     // Completing an empty row accepts the suggested (greyed) values — one tap.
     const patch: Partial<DraftSet> = { completed: true };
     for (const f of fields) if (set[f.key] === undefined && placeholder?.[f.key] !== undefined) patch[f.key] = placeholder[f.key];
@@ -156,26 +170,36 @@ function SetRow({
           value={f.toInput(set[f.key])}
           placeholder={f.toInput(placeholder?.[f.key]) || "–"}
           onChange={(e) => onChange({ [f.key]: f.fromInput(e.target.value) })}
+          aria-invalid={!!problem}
+          aria-describedby={problem || unusual ? `set-${set.id}-note` : undefined}
           className={cn(
             "h-11 w-full min-w-0 rounded-[10px] bg-fill-3 text-center font-rounded text-body font-semibold tabular outline-none",
             "placeholder:font-medium placeholder:text-label-3 focus-visible:ring-2 focus-visible:ring-accent",
             set.completed && "bg-transparent",
+            problem && "ring-2 ring-red",
           )}
         />
       ))}
       <button
         type="button"
         onClick={toggleComplete}
+        disabled={!set.completed && !!problem}
         aria-label={set.completed ? `Mark set ${number} not done` : `Complete set ${number}`}
         aria-pressed={set.completed}
         className={cn(
           "inline-flex size-11 items-center justify-center rounded-[10px] transition-colors",
           set.completed ? "bg-green text-white" : "bg-fill-3 text-label-2 hover:bg-fill-2",
+          !set.completed && problem && "cursor-not-allowed opacity-40",
         )}
       >
         <Check className="size-5" strokeWidth={3} aria-hidden />
       </button>
     </div>
+    {(problem || unusual) && (
+      <p id={`set-${set.id}-note`} role={problem ? "alert" : "status"} className={cn("mb-1 pl-10 text-footnote sm:pl-12", problem ? "text-red-text" : "text-label-2")}>
+        {problem ?? unusual}
+      </p>
+    )}
     {showFeel && set.completed && kind !== "cardio" && (
       <div role="group" aria-label={`How did set ${number} feel?`} className="mb-1 flex items-center gap-1.5 pl-10 sm:pl-12">
         <span className="mr-1 text-footnote text-label-2">Felt</span>
@@ -209,6 +233,7 @@ function ExerciseCard({ entry, exercise, history, unit, coach }: { entry: DraftE
   const { addSet, updateSet, removeSet, removeExercise } = useActiveWorkout();
   const [menu, setMenu] = useState(false);
   const last = useMemo(() => lastSessionSets(history, exercise.id), [history, exercise.id]);
+  const pastSets = useMemo(() => allWorkingSets(history, exercise.id), [history, exercise.id]);
   const target: Target = useMemo(() => {
     const t = targetFor(coach.settings.goal, exercise, CATALOG[exercise.slug ?? ""]?.compound ?? true, coach.profile.experience, coach.settings.sessionMinutes);
     return { ...t, reps: entry.targetReps ?? t.reps, seconds: entry.targetSeconds ?? t.seconds, minutes: entry.targetMinutes ?? t.minutes };
@@ -294,7 +319,8 @@ function ExerciseCard({ entry, exercise, history, unit, coach }: { entry: DraftE
             key={s.id}
             number={i + 1}
             set={s}
-            kind={exercise.kind}
+            exercise={exercise}
+            pastSets={pastSets}
             unit={unit}
             previous={last[i]}
             placeholder={placeholderFor(i)}

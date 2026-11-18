@@ -3,6 +3,7 @@
 
 import type { CoachProfile } from "./estimator";
 import type { TrainingSettings } from "./generator";
+import type { GoalStatus } from "./goals";
 import type { BodyMeasurement, EquipmentAccess, Profile } from "../types";
 
 /** Locations in the order they're offered: the best-equipped first. */
@@ -22,8 +23,12 @@ export function coachProfile(p: Profile, measurements: BodyMeasurement[], now = 
   };
 }
 
-export function trainingSettings(p: Profile, location?: EquipmentAccess): TrainingSettings {
+export function trainingSettings(p: Profile, location?: EquipmentAccess, goals: GoalStatus[] = []): TrainingSettings {
+  const open = goals.filter((g) => !g.achievedAt);
+  const body = open.find((g) => g.goal.kind === "body_weight");
   return {
+    goalExerciseIds: open.flatMap((g) => (g.goal.exerciseId ? [g.goal.exerciseId] : [])),
+    bodyWeightGoal: body ? (body.higherIsBetter ? "gain" : "lose") : undefined,
     daysPerWeek: p.daysPerWeek ?? 3,
     sessionMinutes: p.sessionMinutes ?? 60,
     goal: p.goal ?? "general",

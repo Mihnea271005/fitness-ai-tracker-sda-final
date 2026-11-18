@@ -18,6 +18,10 @@ export interface TrainingSettings {
   equipment: EquipmentLevel;
   avoid: string[]; // exercise ids
   planMode: PlanMode;
+  /** exercises with an open personal goal: scheduled whenever they fit the day */
+  goalExerciseIds?: string[];
+  /** an open body-weight goal: losing adds a cardio finisher */
+  bodyWeightGoal?: "lose" | "gain";
 }
 
 export interface PlannedExercise {
@@ -87,19 +91,29 @@ function hash(s: string) {
   return (h >>> 0) / 2 ** 32;
 }
 
-function buildSlots(day: DayType, settings: TrainingSettings, experience: Experience): Pattern[] {
+/** At most this many slots are added per session for goal exercises the split never trains. */
+const MAX_GOAL_EXTRAS = 2;
+
+function buildSlots(day: DayType, settings: TrainingSettings, experience: Experience, goalPatterns: Pattern[] = []): Pattern[] {
   const base = [...SLOTS[day]];
   const focusPatterns = new Set(settings.focus.flatMap((f) => FOCUS_PATTERNS[f] ?? []));
+  const goals = new Set(goalPatterns);
   // One extra slot for a focus area that fits this day.
   const extra = base.find((p) => focusPatterns.has(p) && p !== "core");
   if (extra) base.splice(Math.min(base.indexOf(extra) + 1, base.length), 0, extra);
   const cap = exercisesPerSession(settings.sessionMinutes, experience);
-  // Trim: drop isolation work that isn't a focus first, then from the end.
+  // Trim: drop isolation work that isn't a focus or a goal first, then from the end (goal slots stay).
   while (base.length > cap) {
-    const i = base.findLastIndex((p) => ISOLATION.includes(p) && !focusPatterns.has(p));
-    base.splice(i >= 0 ? i : base.length - 1, 1);
+    const i = base.findLastIndex((p) => ISOLATION.includes(p) && !focusPatterns.has(p) && !goals.has(p));
+    const j = i >= 0 ? i : base.findLastIndex((p) => !goals.has(p));
+    if (j < 0) break;
+    base.splice(j, 1);
   }
-  if (settings.goal === "endurance" || settings.goal === "fat_loss") base.push("cardio");
+  // A goal exercise whose pattern no day of the split trains (e.g. calves or delts on full-body
+  // days, or a running goal) gets its own slot, so it still comes up every session.
+  const cycle = new Set(splitFor(settings.daysPerWeek).flatMap((d) => SLOTS[d]));
+  for (const p of goalPatterns.filter((p) => !cycle.has(p) && p !== "cardio" && !base.includes(p)).slice(0, MAX_GOAL_EXTRAS)) base.push(p);
+  if (settings.goal === "endurance" || settings.goal === "fat_loss" || settings.bodyWeightGoal === "lose" || goals.has("cardio")) base.push("cardio");
   return base;
 }
 
@@ -126,6 +140,16 @@ export function generateWorkout(
   const lastSameDayIds = new Set(lastSameDay?.exercises.map((e) => e.exerciseId) ?? []);
   const focusPatterns = new Set(settings.focus.flatMap((f) => FOCUS_PATTERNS[f] ?? []));
   const avoid = new Set(settings.avoid);
+  // Goal exercises the AI can schedule here: built-in (it knows their pattern), doable with
+  // this location's equipment, and not on the avoid list.
+  const goalIds = new Set(
+    (settings.goalExerciseIds ?? []).filter((id) => {
+      const e = exercises.find((x) => x.id === id);
+      const c = e?.slug ? CATALOG[e.slug] : undefined;
+      return e && c && !e.archived && !avoid.has(id) && equipmentAllows(settings.equipment, c.needs);
+    }),
+  );
+  const goalPatterns = [...new Set([...goalIds].map((id) => CATALOG[exercises.find((x) => x.id === id)!.slug!].pattern))];
 
   const pick = (pattern: Pattern, slotIndex: number): Exercise | undefined => {
     const candidates = exercises.filter((e) => {
@@ -137,6 +161,7 @@ export function generateWorkout(
     for (const e of candidates) {
       const c = CATALOG[e.slug!];
       let score = 0;
+      if (goalIds.has(e.id)) score += 10; // you're working towards it: always pick it when it fits
       if (done.has(e.id)) score += 3; // familiar: the AI has real data for it
       if (slotIndex < 2 && c.compound) score += 2; // main lifts first
       if (c.needs === settings.equipment) score += 1.5; // use the equipment you have (barbell at the gym, dumbbells at home)
@@ -151,7 +176,7 @@ export function generateWorkout(
   };
 
   const planned: PlannedExercise[] = [];
-  const slots = buildSlots(day, settings, profile.experience);
+  const slots = buildSlots(day, settings, profile.experience, goalPatterns);
   slots.forEach((pattern, i) => {
     const chosen = pick(pattern, i) ?? (FALLBACK[pattern] ?? []).map((p) => pick(p, i)).find(Boolean);
     if (!chosen) return;
@@ -162,8 +187,9 @@ export function generateWorkout(
     // Continuity: if you've been doing a rep count close to the goal's (±2), keep it.
     const lastReps = estimate?.lastSets?.[0]?.reps;
     if (target.reps && lastReps && Math.abs(lastReps - target.reps) <= 2 && chosen.kind === "strength") target.reps = lastReps;
-    const why =
-      i === 0
+    const why = goalIds.has(chosen.id)
+      ? "Working towards your goal"
+      : i === 0
         ? "Main lift of the day"
         : focusPatterns.has(pattern)
           ? `Your focus: ${settings.focus.find((f) => FOCUS_PATTERNS[f]?.includes(pattern))}`

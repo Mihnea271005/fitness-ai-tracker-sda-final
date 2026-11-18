@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Dumbbell, Flame, Play, Sparkles, Timer, Trophy, Weight } from "lucide-react";
+import { ChevronRight, Dumbbell, Flame, Play, Sparkles, Target, Timer, Trophy, Weight } from "lucide-react";
+import { ProgressBar, goalOutlook } from "@/components/goal-row";
 import { PageHeader } from "@/components/ui/interactive";
 import { ButtonLink, Card, ListSection, SectionTitle, StatTile } from "@/components/ui/primitives";
 import { GoalRing } from "@/components/goal-ring";
@@ -26,8 +27,8 @@ export default function HomePage() {
 }
 
 async function Home() {
-  const [profile, workouts, exercises, tz, { plan, today }] = await Promise.all([getCurrentUser(), getWorkouts(), getExerciseMap(), getTimeZone(), getCoach()]);
-  const { plans } = await getCoach();
+  const [profile, workouts, exercises, tz, { plan, plans, today, goals }] = await Promise.all([getCurrentUser(), getWorkouts(), getExerciseMap(), getTimeZone(), getCoach()]);
+  const topGoal = goals.find((g) => !g.achievedAt);
   const now = new Date();
   const weeks = weeklySummaries(workouts, exercises, now, tz, 12);
   const thisWeek = weeks[weeks.length - 1];
@@ -95,6 +96,22 @@ async function Home() {
           </ButtonLink>
         </div>
       </Card>
+
+      {topGoal && (
+        <Link href="/progress#goals" className="mb-6 block rounded-[var(--radius-cell)] bg-surface p-4 transition-colors hover:bg-fill-3">
+          <div className="mb-2 flex items-center gap-2">
+            <Target className="size-4 text-accent" aria-hidden />
+            <span className="text-footnote font-semibold uppercase tracking-wide text-label-2">Closest goal</span>
+            <ChevronRight className="ml-auto size-4 text-label-3" strokeWidth={2.5} aria-hidden />
+          </div>
+          <div className="mb-2 flex items-baseline gap-2">
+            <span className="min-w-0 flex-1 truncate text-headline font-semibold">{topGoal.title}</span>
+            <span className="font-rounded text-title3 font-bold tabular">{Math.round(topGoal.progress * 100)}%</span>
+          </div>
+          <ProgressBar value={topGoal.progress} label={`${topGoal.title}: ${Math.round(topGoal.progress * 100)}% there`} />
+          <p className="mt-2 text-footnote text-label-2">{goalOutlook(topGoal, tz)}</p>
+        </Link>
+      )}
 
       {workouts.length === 0 ? (
         <Card className="mb-8 flex flex-col items-center gap-3 p-6 text-center">

@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { getCurrentUser } from "./auth";
 import { createClient } from "./supabase/server";
-import type { BodyMeasurement, Exercise, Routine, SetType, Workout } from "./types";
+import type { BodyMeasurement, Exercise, PersonalGoal, Routine, SetType, Workout } from "./types";
 
 // Data Access Layer for training data. Every function first resolves the signed-in
 // user (redirecting to /login if there is none); row level security in Postgres is
@@ -216,5 +216,43 @@ export const getMeasurements = cache(async (): Promise<BodyMeasurement[]> => {
     armCm: n(r.arm_cm),
     thighCm: n(r.thigh_cm),
     notes: r.notes ?? undefined,
+  }));
+});
+
+/* ------------------------------------------------------------------ goals */
+
+interface GoalRow {
+  id: string;
+  kind: PersonalGoal["kind"];
+  exercise_id: string | null;
+  target_weight_kg: Num;
+  target_reps: number | null;
+  target_seconds: number | null;
+  target_distance_m: number | null;
+  baseline: Num;
+  deadline: string | null;
+  created_at: string;
+}
+
+/** Oldest first. */
+export const getGoals = cache(async (): Promise<PersonalGoal[]> => {
+  await getCurrentUser();
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("goals")
+    .select("id, kind, exercise_id, target_weight_kg, target_reps, target_seconds, target_distance_m, baseline, deadline, created_at")
+    .order("created_at");
+  if (error) throw new Error(`Couldn't load goals: ${error.message}`);
+  return (data as GoalRow[]).map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    exerciseId: r.exercise_id ?? undefined,
+    targetWeightKg: n(r.target_weight_kg),
+    targetReps: r.target_reps ?? undefined,
+    targetSeconds: r.target_seconds ?? undefined,
+    targetDistanceM: r.target_distance_m ?? undefined,
+    baseline: n(r.baseline),
+    deadline: r.deadline ?? undefined,
+    createdAt: r.created_at,
   }));
 });

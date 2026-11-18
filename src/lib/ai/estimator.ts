@@ -4,7 +4,11 @@
 
 import { CATALOG, type Experience } from "./catalog";
 import { DEFAULT_BODYWEIGHT, predictOneRepMax, type Sex } from "./population";
+import { checkSet } from "../limits";
 import type { Exercise, Workout } from "../types";
+
+/** A logged working set the AI should learn from: done, not a warm-up, and physically possible. */
+const usable = (ex: Exercise, s: Workout["exercises"][number]["sets"][number]) => s.completed && s.type !== "warmup" && checkSet(ex, s, "kg") === null;
 
 export interface CoachProfile {
   sex: Sex;
@@ -76,7 +80,7 @@ export function priorEstimate(ex: Exercise, p: CoachProfile): number | undefined
 
 /** One session's value for the exercise, from its completed working sets. */
 function sessionValue(ex: Exercise, sets: Workout["exercises"][number]["sets"], bodyweightKg: number): number | undefined {
-  const working = sets.filter((s) => s.completed && s.type !== "warmup");
+  const working = sets.filter((s) => usable(ex, s));
   if (!working.length) return undefined;
   const feelOf = (s: (typeof working)[number]) => s.feel;
   switch (ex.kind) {
@@ -157,7 +161,7 @@ export function estimateExercise(ex: Exercise, workouts: Workout[], p: CoachProf
 
     // Consecutive sessions where a later set fell 2+ reps short of the first one.
     for (const s of sessions) {
-      const working = s.sets.filter((x) => x.completed && x.type !== "warmup" && x.reps);
+      const working = s.sets.filter((x) => usable(ex, x) && x.reps);
       const target = working[0]?.reps ?? 0;
       if (working.length > 1 && working.some((x) => (x.reps ?? 0) <= target - 2)) missesInARow++;
       else break;
@@ -165,7 +169,7 @@ export function estimateExercise(ex: Exercise, workouts: Workout[], p: CoachProf
   }
 
   const lastSets = sessions[0]?.sets
-    .filter((s) => s.completed && s.type !== "warmup")
+    .filter((s) => usable(ex, s))
     .map((s) => ({ weightKg: s.weightKg, reps: s.reps, durationS: s.durationS, distanceM: s.distanceM, feel: s.feel }));
 
   return { value, source, sessions: sessions.length, daysSinceLast, lastSets, missesInARow };
