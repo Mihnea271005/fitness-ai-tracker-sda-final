@@ -1,0 +1,9 @@
+{
+  "name": "run-fitness-ai-tracker-driver",
+  "private": true,
+  "type": "module",
+  "description": "Browser driver for agents: drives the running app in headless Microsoft Edge via playwright-core.",
+  "dependencies": {
+    "playwright-core": "1.49.1"
+  }
+}

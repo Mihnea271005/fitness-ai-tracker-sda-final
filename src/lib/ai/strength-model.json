@@ -1,0 +1,143 @@
+{
+  "version": 1,
+  "trained_on": "2026-11-14",
+  "source": "OpenPowerlifting (OpenIPF subset), public domain. https://www.openpowerlifting.org",
+  "population": "Each lifter's first raw competition (16\u201375 y, 40\u2013180 kg).",
+  "features": [
+    "ln(bodyweight_kg)",
+    "a",
+    "a^2",
+    "a^3  where a = (age - 30) / 10"
+  ],
+  "target": "ln(best lift kg)",
+  "models": {
+    "squat": {
+      "M": {
+        "intercept": 2.394465,
+        "coef": [
+          0.636257,
+          -0.01748,
+          -0.064744,
+          0.009834
+        ],
+        "resid_p25": -0.1043,
+        "resid_p75": 0.1361,
+        "n_train": 98206
+      },
+      "F": {
+        "intercept": 2.552635,
+        "coef": [
+          0.501017,
+          -0.034128,
+          -0.062104,
+          0.009556
+        ],
+        "resid_p25": -0.1304,
+        "resid_p75": 0.1612,
+        "n_train": 43044
+      }
+    },
+    "bench": {
+      "M": {
+        "intercept": 2.108531,
+        "coef": [
+          0.619705,
+          0.034555,
+          -0.069369,
+          0.01012
+        ],
+        "resid_p25": -0.1146,
+        "resid_p75": 0.1372,
+        "n_train": 115294
+      },
+      "F": {
+        "intercept": 2.196368,
+        "coef": [
+          0.447427,
+          0.006674,
+          -0.053903,
+          0.007903
+        ],
+        "resid_p25": -0.153,
+        "resid_p75": 0.1586,
+        "n_train": 47440
+      }
+    },
+    "deadlift": {
+      "M": {
+        "intercept": 3.287816,
+        "coef": [
+          0.471441,
+          -0.014023,
+          -0.062825,
+          0.011027
+        ],
+        "resid_p25": -0.0893,
+        "resid_p75": 0.1172,
+        "n_train": 99854
+      },
+      "F": {
+        "intercept": 3.203095,
+        "coef": [
+          0.394084,
+          -0.0071,
+          -0.053636,
+          0.009271
+        ],
+        "resid_p25": -0.1116,
+        "resid_p75": 0.1354,
+        "n_train": 43939
+      }
+    }
+  },
+  "evaluation": {
+    "squat": {
+      "M": {
+        "n_test": 24552,
+        "mae_kg_baseline_bw_band": 27.03,
+        "mae_kg_linear (shipped)": 26.35,
+        "mae_kg_gradient_boosting": 25.46,
+        "mape_linear_pct": 16.7
+      },
+      "F": {
+        "n_test": 10762,
+        "mae_kg_baseline_bw_band": 18.93,
+        "mae_kg_linear (shipped)": 18.21,
+        "mae_kg_gradient_boosting": 17.83,
+        "mape_linear_pct": 19.6
+      }
+    },
+    "bench": {
+      "M": {
+        "n_test": 28824,
+        "mae_kg_baseline_bw_band": 19.29,
+        "mae_kg_linear (shipped)": 18.48,
+        "mae_kg_gradient_boosting": 18.04,
+        "mape_linear_pct": 16.4
+      },
+      "F": {
+        "n_test": 11860,
+        "mae_kg_baseline_bw_band": 10.67,
+        "mae_kg_linear (shipped)": 10.51,
+        "mae_kg_gradient_boosting": 10.3,
+        "mape_linear_pct": 19.3
+      }
+    },
+    "deadlift": {
+      "M": {
+        "n_test": 24964,
+        "mae_kg_baseline_bw_band": 27.35,
+        "mae_kg_linear (shipped)": 26.54,
+        "mae_kg_gradient_boosting": 25.47,
+        "mape_linear_pct": 14.4
+      },
+      "F": {
+        "n_test": 10985,
+        "mae_kg_baseline_bw_band": 18.73,
+        "mae_kg_linear (shipped)": 18.29,
+        "mae_kg_gradient_boosting": 17.88,
+        "mape_linear_pct": 16.3
+      }
+    }
+  }
+}
